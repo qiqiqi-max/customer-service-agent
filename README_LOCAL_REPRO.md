@@ -17,7 +17,7 @@ This guide records the exact local setup and verification flow that has been val
 
 Run in:
 
-`D:\projects\ai-app-lab\demohouse\shop_assist\backend`
+`D:\projects\_codex_push_shop_assist_20260426\backend`
 
 ```powershell
 python -m venv .venv
@@ -49,6 +49,44 @@ $env:LANGUAGE="zh"
 
 Keep this terminal open.
 
+### Easier local startup
+
+Create a local env file once:
+
+```powershell
+Copy-Item .env.local.example .env.local
+```
+
+Fill in the real values inside `.env.local`, then use:
+
+```powershell
+.\start_demo.ps1
+```
+
+Or just double-click:
+
+- `start_demo.cmd`
+
+This script will:
+
+- load local environment variables from `.env.local`
+- stop an old `main.py` process if one already exists
+- start the backend
+- wait for `/v1/ping`
+- open the browser at `http://127.0.0.1:8080/demo`
+
+### Stop the local demo
+
+```powershell
+.\stop_demo.ps1
+```
+
+Or just double-click:
+
+- `stop_demo.cmd`
+
+This script will stop the running `main.py` process for `shop_assist`.
+
 ## 5) Health check
 
 Run in another terminal:
@@ -58,6 +96,22 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/v1/ping
 ```
 
 Expected: `StatusCode : 200`
+
+## 5.1) Open demo UI
+
+After the backend starts, open the browser:
+
+`http://127.0.0.1:8080/demo`
+
+This page provides a lightweight web UI for:
+
+- product shelf browsing
+- capability toggle
+- live customer-service chat
+- conversation summary
+- quality inspection
+- FAQ saving
+- follow-up question generation
 
 ## 6) API verification
 
@@ -156,4 +210,3 @@ For response text that is already garbled:
 $s = ($resp.Content | ConvertFrom-Json).choices[0].message.content
 [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding(28591).GetBytes($s))
 ```
-

@@ -1,15 +1,8 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# Licensed under the 【火山方舟】原型应用软件自用许可协议
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     https://www.volcengine.com/docs/82379/1433703
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the "火山方舟" 原型应用软件自用许可协议
 
 import os
+from pathlib import Path
 from typing import AsyncIterable, List, Union
 
 import pandas as pd
@@ -19,6 +12,8 @@ from data import rag
 from data.product import get_products
 from data.rag import retrieval_knowledge
 from fastapi import HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from next_question import next_question_chat
 from pydantic import BaseModel, Field
 from quality_inspection import quality_inspection_chat
@@ -28,7 +23,6 @@ from utils import get_auth_header, get_handler
 
 from arkitect.core.component.bot.server import BotServer
 from arkitect.core.component.llm import BaseChatLanguageModel
-from arkitect.core.errors import InternalServiceError
 from arkitect.launcher.runner import (
     get_endpoint_config,
     get_runner,
@@ -47,6 +41,9 @@ from arkitect.utils.context import (
     set_resource_type,
 )
 
+BACKEND_DIR = Path(__file__).resolve().parent
+WEBUI_DIR = BACKEND_DIR / "webui"
+
 
 @task()
 async def custom_support_chat(
@@ -60,10 +57,10 @@ async def custom_support_chat(
     )
     products = meta_data.get("product_list", [*get_products()])
 
-    # insert knowledge
     tools, system_prompt = register_support_functions(functions, products, account_id)
     messages = [ArkMessage(role="system", content=system_prompt)]
     messages.extend(request.messages)
+
     knowledge_prompt = ""
     action_detail = None
     try:
@@ -82,7 +79,6 @@ async def custom_support_chat(
             },
         )
     except Exception:
-        # Degrade gracefully when KB is misconfigured/unavailable.
         knowledge_prompt = ""
 
     llm = BaseChatLanguageModel(
@@ -97,8 +93,11 @@ async def custom_support_chat(
             extra_headers=get_auth_header(),
             extra_body={"thinking": {"type": "disabled"}},
         ):
-            if resp.usage and action_detail:
-                resp.bot_usage = BotUsage(action_details=[action_detail])
+            if action_detail:
+                if resp.bot_usage:
+                    resp.merge_bot_usages(BotUsage(action_details=[action_detail]))
+                else:
+                    resp.bot_usage = BotUsage(action_details=[action_detail])
             yield resp
     else:
         resp = await llm.arun(
@@ -108,7 +107,10 @@ async def custom_support_chat(
             extra_body={"thinking": {"type": "disabled"}},
         )
         if action_detail:
-            resp.bot_usage = BotUsage(action_details=[action_detail])
+            if resp.bot_usage:
+                resp.merge_bot_usages(BotUsage(action_details=[action_detail]))
+            else:
+                resp.bot_usage = BotUsage(action_details=[action_detail])
         yield resp
 
 
@@ -131,6 +133,10 @@ async def list_products():
     )
 
 
+async def demo_page():
+    return FileResponse(WEBUI_DIR / "index.html")
+
+
 class FAQRequest(BaseModel):
     question: str = Field(..., max_length=100)
     answer: str = Field(..., max_length=500)
@@ -148,12 +154,12 @@ async def save_faq(faq: FAQRequest):
             ),
             faq.account_id,
         )
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail={
                 "code": "SaveFaqError",
-                "message": str(e),
+                "message": str(exc),
             },
         )
     return {"message": "success"}
@@ -189,6 +195,9 @@ if __name__ == "__main__":
         get_handler(custom_support_chat),
         methods=["POST"],
     )
+    server.app.add_api_route("/", demo_page, methods=["GET"])
+    server.app.add_api_route("/demo", demo_page, methods=["GET"])
+    server.app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="webui")
     server.app.add_api_route(
         "/api/v3/bots/chat/completions/products",
         list_products,
