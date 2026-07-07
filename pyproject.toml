@@ -1,12 +1,15 @@
 [project]
-name = "backend"
+name = "customer-service-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "Customer service agent demo backend with real and mock integration modes."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "arkitect==0.2.1",
+    "fastapi>=0.136.1",
     "openpyxl>=3.1.5",
     "pandas>=2.2.3",
+    "pydantic>=2.13.3",
+    "tos>=2.9.0",
     "volcengine>=1.0.183",
 ]

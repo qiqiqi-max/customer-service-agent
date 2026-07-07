@@ -17,7 +17,7 @@ This guide records the exact local setup and verification flow that has been val
 
 Run in:
 
-`D:\projects\_codex_push_shop_assist_20260426\backend`
+`D:\projects\customer-service-agent\backend`
 
 ```powershell
 python -m venv .venv
@@ -26,6 +26,19 @@ python -m venv .venv
 ```
 
 ## 3) Environment variables
+
+For local development without cloud resources, use mock mode:
+
+```powershell
+$env:MOCK_MODE="True"
+$env:LANGUAGE="zh"
+```
+
+In mock mode, chat, summary, quality inspection, next-question generation, product
+listing, order lookup, logistics, refund simulation, and FAQ saving can all be
+tested locally.
+
+For real VolcEngine integration, set `MOCK_MODE=False` and configure:
 
 Set in the same PowerShell window where `main.py` will be started:
 
@@ -40,6 +53,74 @@ $env:USE_SERVER_AUTH="True"
 $env:ARK_API_KEY="your_ark_api_key"
 $env:LANGUAGE="zh"
 ```
+
+For DeepSeek/OpenAI-compatible integration, set:
+
+```powershell
+$env:MOCK_MODE="False"
+$env:LLM_PROVIDER="deepseek"
+$env:DEEPSEEK_API_KEY="your_deepseek_api_key"
+$env:DEEPSEEK_BASE_URL="https://api.deepseek.com"
+$env:DEEPSEEK_MODEL="deepseekv4pro"
+$env:LANGUAGE="zh"
+```
+
+If your account exposes the model under a different ID, change only
+`DEEPSEEK_MODEL`.
+
+For Zhipu/OpenAI-compatible integration, set:
+
+```powershell
+$env:MOCK_MODE="False"
+$env:LLM_PROVIDER="zhipu"
+$env:ZHIPU_API_KEY="your_zhipu_api_key"
+$env:ZHIPU_BASE_URL="https://open.bigmodel.cn/api/paas/v4/"
+$env:ZHIPU_MODEL="glm-5.2"
+$env:LANGUAGE="zh"
+```
+
+`ZAI_API_KEY` is also accepted as an alias for `ZHIPU_API_KEY`.
+
+To replace the VolcEngine knowledge base with Dify, set:
+
+```powershell
+$env:KNOWLEDGE_PROVIDER="dify"
+$env:DIFY_API_KEY="your_dify_api_key"
+$env:DIFY_BASE_URL="https://api.dify.ai/v1"
+$env:DIFY_DATASET_ID="your_product_dataset_id"
+$env:DIFY_FAQ_DATASET_ID="your_faq_dataset_id"
+$env:DIFY_TOP_K="5"
+```
+
+If you only have one Dify dataset, set `DIFY_DATASET_ID` and
+`DIFY_FAQ_DATASET_ID` to the same value.
+
+To replace local mock order/logistics/refund data with a real business API, set:
+
+```powershell
+$env:BUSINESS_DATA_PROVIDER="http"
+$env:BUSINESS_API_BASE_URL="https://your-business-api.example.com"
+$env:BUSINESS_API_KEY="your_business_api_key"
+$env:BUSINESS_API_TIMEOUT="8"
+```
+
+The built-in HTTP adapter calls:
+
+- `GET /orders?account_id=...`
+- `GET /orders/{order_id}?account_id=...`
+- `GET /tracking?account_id=...&order_id=...&tracking_number=...`
+- `POST /refunds`
+
+Structured JSON logs are written to `logs/app.log` by default:
+
+```powershell
+$env:LOG_LEVEL="INFO"
+$env:LOG_DIR="./logs"
+$env:LOG_TO_STDOUT="False"
+```
+
+Each HTTP response includes `X-Request-ID`, which can be used to trace the
+matching `http.request` event in `logs/app.log`.
 
 ## 4) Start backend
 
@@ -70,7 +151,7 @@ Or just double-click:
 This script will:
 
 - load local environment variables from `.env.local`
-- stop an old `main.py` process if one already exists
+- stop an old `customer-service-agent` `main.py` process if one already exists
 - start the backend
 - wait for `/v1/ping`
 - open the browser at `http://127.0.0.1:8080/demo`
@@ -85,7 +166,7 @@ Or just double-click:
 
 - `stop_demo.cmd`
 
-This script will stop the running `main.py` process for `shop_assist`.
+This script will stop the running `main.py` process for `customer-service-agent`.
 
 ## 5) Health check
 

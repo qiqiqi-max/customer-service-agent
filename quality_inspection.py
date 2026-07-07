@@ -11,13 +11,14 @@
 
 from typing import AsyncIterable
 
-from config import endpoint_id, language
+from config import endpoint_id, language, mock_mode
+from llm_provider import is_openai_compatible_provider, run_openai_compatible_chat
+from mock_agent import make_mock_quality_response
 from utils import get_auth_header
 
 from arkitect.core.component.llm import BaseChatLanguageModel
 from arkitect.telemetry.trace import task
 from arkitect.types.llm.model import (
-    ArkChatParameters,
     ArkChatRequest,
     ArkMessage,
     Response,
@@ -29,6 +30,10 @@ async def quality_inspection_chat(request: ArkChatRequest) -> AsyncIterable[Resp
     """
     Perform quality inspection on customer service conversation.
     """
+    if mock_mode:
+        yield make_mock_quality_response(request)
+        return
+
     # Chinese system prompt
     system_prompt_zh = """
 # 角色
@@ -118,6 +123,10 @@ Improvement Suggestion: "Dear, many users have shared positive feedback about ex
     # Create new request with quality inspection system prompt
     messages = [ArkMessage(role="system", content=system_prompt)]
     messages.extend(request.messages)
+
+    if is_openai_compatible_provider():
+        yield await run_openai_compatible_chat(messages)
+        return
 
     llm = BaseChatLanguageModel(
         model=endpoint_id,

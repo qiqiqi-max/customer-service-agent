@@ -15,11 +15,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from .cache import LRUCache
-import sys
-import os
 
-# Add the parent directory to sys.path to import config
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import language
 
 

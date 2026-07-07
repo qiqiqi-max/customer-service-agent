@@ -62,7 +62,7 @@
 
 ```shell
 git clone https://github.com/volcengine/ai-app-lab.git
-cd demohouse/shop_assist/backend
+cd customer-service-agent/backend
 ```
 
 4. 设置环境变量，可参考【环境准备】章节获取以下内容

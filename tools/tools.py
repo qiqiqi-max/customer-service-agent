@@ -187,11 +187,6 @@ FUNCTION_MAP = FUNCTION_MAP_ZH if language == "zh" else FUNCTION_MAP_EN
 def register_support_functions(
     functions: list, products: list, account_id: str
 ) -> Tuple[List[Callable], str]:
-    # Get products based on language configuration
-    from data.product import get_products
-
-    current_products = get_products()
-
     # Use the appropriate language for the prompt
     prompts = f"""{SYSTEM_PROMPT}
 # {"货架范围" if language == "zh" else "Product Range"}

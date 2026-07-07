@@ -11,8 +11,7 @@
 
 from typing import Callable
 
-from data import orders, tracking
-from data.orders import OrderStatus
+from business_services import get_business_service
 from pydantic import Field
 
 
@@ -29,23 +28,7 @@ def get_pack_track_fn(account_id: str) -> Callable:
         Use this function to query shipping information. Returns tracking information.
         Either order ID or tracking number must be provided.
         """
-        if order_id:
-            order = await orders.get_order(account_id, order_id)
-            if not order:
-                return "Order information not found"
-            if order["status"] == OrderStatus.REFUNDED.value:
-                return "Order has been refunded, no shipping information available"
-            if order["status"] == OrderStatus.PENDING.value:
-                return (
-                    "Order has not been shipped yet, no tracking information available"
-                )
-            tracking_number = order.get("tracking_number")
-
-        if not tracking_number:
-            return "Order has no tracking number"
-
-        tracking_info = tracking.get_tracking_info(tracking_number)
-
-        return tracking_info
+        service = get_business_service()
+        return await service.get_tracking(account_id, order_id, tracking_number)
 
     return pack_track

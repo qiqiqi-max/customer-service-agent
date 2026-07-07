@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shop Assist</title>
+    <title>客服工单台</title>
     <meta
       name="description"
-      content="Shop Assist 是一套面向电商客服场景的智能工作台，支持导购推荐、订单查询、物流跟踪、售后处理、FAQ 沉淀与回复质检。"
+      content="面向电商售前、订单、物流与售后的客服接待工作站。"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,10 +14,10 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260707-workbench-3" />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%230f766e'/%3E%3Cstop offset='1' stop-color='%23f59e0b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Cpath d='M16 20h32v6H16zm0 10h22v6H16zm0 10h32v6H16z' fill='white'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%231f241f'/%3E%3Crect x='12' y='14' width='40' height='36' rx='6' fill='%23f7f5ef'/%3E%3Cpath d='M20 25h24M20 33h18M20 41h24' stroke='%231d6f50' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
     />
   </head>
   <body>
@@ -25,16 +25,16 @@
       <aside class="sidebar">
         <div class="sidebar-inner">
           <div class="brand">
-            <div class="brand-badge">S</div>
+            <div class="brand-badge">客</div>
             <div>
-              <p class="brand-name">Shop Assist</p>
-              <p class="brand-subtitle">智能电商客服工作台</p>
+              <p class="brand-name">客服工单台</p>
+              <p class="brand-subtitle">电商服务工作站</p>
             </div>
           </div>
 
-          <section class="sidebar-section">
+          <section class="sidebar-section workspace-card">
             <div class="section-heading">
-              <h2>工作空间</h2>
+              <h2>接待设置</h2>
               <span class="status-dot">
                 <span class="status-dot-core"></span>
                 <strong id="health-status">检查中</strong>
@@ -42,14 +42,14 @@
             </div>
 
             <label class="field">
-              <span>Account ID</span>
+              <span>客户账号</span>
               <input id="account-id" type="text" value="100000" />
             </label>
 
             <label class="switch-row">
               <div>
-                <span>流式回复</span>
-                <small>逐步展示 Agent 的生成过程与回复内容</small>
+                <span>逐字显示</span>
+                <small>适合观察回复过程，关闭后一次性返回完整内容。</small>
               </div>
               <input id="stream-mode" type="checkbox" checked />
             </label>
@@ -57,15 +57,15 @@
 
           <section class="sidebar-section">
             <div class="section-heading">
-              <h2>服务场景</h2>
-              <span class="section-meta">一键切换能力组合</span>
+              <h2>处理场景</h2>
+              <span class="section-meta">快速套用接待范围</span>
             </div>
             <div id="scenario-chips" class="scenario-list"></div>
           </section>
 
           <section class="sidebar-section">
             <div class="section-heading">
-              <h2>客服能力</h2>
+              <h2>服务权限</h2>
               <span class="section-meta" id="capability-pill">5 项已启用</span>
             </div>
             <div id="function-grid" class="capability-list"></div>
@@ -73,64 +73,79 @@
 
           <section class="sidebar-section">
             <div class="section-heading">
-              <h2>商品范围</h2>
+              <h2>商品货架</h2>
               <span class="section-meta" id="product-pill">加载中</span>
             </div>
             <div id="product-grid" class="product-list"></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-heading">
+              <h2>最近接待</h2>
+              <span class="section-meta" id="conversation-pill">加载中</span>
+            </div>
+            <div class="conversation-actions">
+              <button type="button" id="new-conversation" class="mini-button">
+                新接待
+              </button>
+              <button type="button" id="refresh-conversations" class="mini-button">
+                刷新
+              </button>
+            </div>
+            <div id="conversation-list" class="conversation-list" aria-live="polite"></div>
           </section>
         </div>
       </aside>
 
       <main class="main-panel">
-        <header class="topbar surface">
+        <header class="topbar">
           <div class="topbar-copy">
-            <span class="eyebrow">Customer Operations Console</span>
-            <h1>统一处理售前、订单、物流与售后问题</h1>
+            <span class="eyebrow">今日接待</span>
+            <h1>接待中心</h1>
             <p class="topbar-subtitle">
-              将知识检索、工具调用和对话管理整合到一个清晰的工作界面中，让智能客服更像真实业务系统，而不是单次演示页面。
+              按客户、商品、订单与售后记录组织对话，让每一次接待都有上下文、有结果、有复盘。
             </p>
           </div>
 
-          <div class="topbar-stats">
+          <div class="topbar-stats" aria-label="工作台概览">
             <div class="stat-card">
-              <span>消息数</span>
+              <span>会话消息</span>
               <strong id="message-count">0</strong>
             </div>
             <div class="stat-card">
-              <span>能力开关</span>
+              <span>开启权限</span>
               <strong id="active-capability-count">0</strong>
             </div>
             <div class="stat-card">
-              <span>商品范围</span>
+              <span>选中商品</span>
               <strong id="selected-product-count">0</strong>
             </div>
             <div class="stat-card">
-              <span>响应模式</span>
-              <strong id="mode-label">Streaming</strong>
+              <span>回复方式</span>
+              <strong id="mode-label">逐字</strong>
             </div>
           </div>
         </header>
 
         <section class="content-grid">
           <section class="conversation-panel">
-            <section class="surface intro-panel">
+            <section class="intro-panel">
               <div class="intro-copy">
-                <h3>从常见客服场景快速开始</h3>
-                <p>
-                  你可以先从左侧选择能力范围和商品集合，再从下面的预置问题发起对话。系统会按需调用知识库、订单、物流与退款工具，并将结果同步到右侧信息面板。
-                </p>
+                <span class="panel-kicker">接待入口</span>
+                <h2>常用问题</h2>
+                <p>选择一句常见咨询，或直接在下方输入顾客问题。</p>
               </div>
               <div id="quick-prompts" class="prompt-grid"></div>
             </section>
 
-            <section class="surface conversation-surface">
+            <section class="conversation-surface">
               <div class="conversation-header">
                 <div>
-                  <h3>会话记录</h3>
-                  <p>保留完整上下文，适合连续处理同一用户的多轮问题。</p>
+                  <span class="panel-kicker">当前会话</span>
+                  <h2>接待记录</h2>
                 </div>
                 <button type="button" id="clear-chat" class="button button-secondary">
-                  清空会话
+                  清空
                 </button>
               </div>
 
@@ -138,16 +153,16 @@
 
               <form id="composer-form" class="composer">
                 <label class="composer-field">
-                  <span class="sr-only">输入消息</span>
+                  <span class="sr-only">输入顾客消息</span>
                   <textarea
                     id="composer-input"
                     rows="4"
-                    placeholder="例如：我之前下单了一款手机支架，想查一下现在的物流进度，以及如果不合适能不能退货。"
+                    placeholder="输入顾客问题，例如：我之前买的腰靠垫现在送到哪里了？如果不合适还能退吗？"
                   ></textarea>
                 </label>
                 <div class="composer-footer">
                   <p class="composer-tip">
-                    右侧会自动同步展示业务结果、执行轨迹与运营辅助信息。
+                    右侧同步更新客户档案、处理结果和质检沉淀。
                   </p>
                   <button id="composer-submit" type="submit" class="button button-primary">
                     发送消息
@@ -158,7 +173,7 @@
           </section>
 
           <aside class="details-panel">
-            <section class="tabs surface">
+            <section class="tabs">
               <div class="tab-list" role="tablist" aria-label="信息面板">
                 <button
                   type="button"
@@ -167,7 +182,7 @@
                   role="tab"
                   aria-selected="true"
                 >
-                  业务结果
+                  工单结果
                 </button>
                 <button
                   type="button"
@@ -176,7 +191,7 @@
                   role="tab"
                   aria-selected="false"
                 >
-                  执行轨迹
+                  处理记录
                 </button>
                 <button
                   type="button"
@@ -185,25 +200,58 @@
                   role="tab"
                   aria-selected="false"
                 >
-                  运营辅助
+                  复盘沉淀
                 </button>
               </div>
 
               <div class="tab-panel is-active" data-panel="results">
                 <div class="panel-header">
-                  <h3>结构化结果</h3>
+                  <div>
+                    <span class="panel-kicker">客户档案</span>
+                    <h2>本轮概况</h2>
+                  </div>
                   <span class="panel-meta" id="result-pill">暂无结果</span>
                 </div>
+                <section class="customer-context" id="customer-context">
+                  <div class="context-head">
+                    <div>
+                      <span>当前客户</span>
+                      <strong id="context-account">100000</strong>
+                    </div>
+                    <span id="context-conversation">新会话</span>
+                  </div>
+                  <div class="context-grid">
+                    <div>
+                      <span>最近诉求</span>
+                      <strong id="context-intent">尚未开始</strong>
+                    </div>
+                    <div>
+                      <span>业务状态</span>
+                      <strong id="context-status">等待消息</strong>
+                    </div>
+                    <div>
+                      <span>最近商品</span>
+                      <strong id="context-product">暂无</strong>
+                    </div>
+                    <div>
+                      <span>知识命中</span>
+                      <strong id="context-knowledge">0 条</strong>
+                    </div>
+                  </div>
+                </section>
                 <div id="result-cards" class="result-cards">
                   <div class="empty-state">
-                    订单信息、物流节点、退款处理与知识检索摘要会在这里自动汇总。
+                    订单信息、物流节点、退款处理与知识检索摘要会在这里汇总。
                   </div>
                 </div>
               </div>
 
               <div class="tab-panel" data-panel="execution">
                 <div class="panel-header">
-                  <h3>执行轨迹</h3>
+                  <div>
+                    <span class="panel-kicker">处理过程</span>
+                    <h2>调用记录</h2>
+                  </div>
                   <span class="panel-meta" id="execution-pill">0 条动作</span>
                 </div>
                 <div class="execution-summary">
@@ -212,27 +260,30 @@
                     <strong id="latest-action-name">暂无</strong>
                   </div>
                   <div class="mini-stat">
-                    <span>工具调用</span>
+                    <span>记录数量</span>
                     <strong id="tool-call-count">0</strong>
                   </div>
                 </div>
                 <div id="execution-timeline" class="execution-timeline">
                   <div class="empty-state">
-                    这里会显示知识检索与工具调用的输入、输出和时间点，方便排查与复盘。
+                    知识检索、订单查询、物流跟踪等处理记录会显示在这里。
                   </div>
                 </div>
               </div>
 
               <div class="tab-panel" data-panel="ops">
                 <div class="panel-header">
-                  <h3>运营辅助</h3>
-                  <span class="panel-meta">沉淀可复用客服资产</span>
+                  <div>
+                    <span class="panel-kicker">复盘沉淀</span>
+                    <h2>服务资产</h2>
+                  </div>
+                  <span class="panel-meta">用于后续复用</span>
                 </div>
 
                 <article class="ops-card">
                   <div class="ops-head">
                     <div>
-                      <h4>会话总结</h4>
+                      <h3>会话总结</h3>
                       <p>提炼用户诉求、处理结果和后续风险点。</p>
                     </div>
                     <button id="summary-btn" class="button button-secondary">生成</button>
@@ -245,8 +296,8 @@
                 <article class="ops-card">
                   <div class="ops-head">
                     <div>
-                      <h4>追问建议</h4>
-                      <p>预测用户下一步可能追问的问题，方便客服连续服务。</p>
+                      <h3>追问建议</h3>
+                      <p>给出下一步可继续确认的问题，方便连续服务。</p>
                     </div>
                     <button id="next-question-btn" class="button button-secondary">
                       生成
@@ -260,7 +311,7 @@
                 <article class="ops-card">
                   <div class="ops-head">
                     <div>
-                      <h4>回复质检</h4>
+                      <h3>回复质检</h3>
                       <p>检查最新回复是否存在夸大承诺、绝对化表述或服务态度风险。</p>
                     </div>
                     <button id="quality-btn" class="button button-secondary">检查</button>
@@ -281,8 +332,8 @@
                 <article class="ops-card">
                   <div class="ops-head">
                     <div>
-                      <h4>FAQ 沉淀</h4>
-                      <p>将高质量问答保存到知识库，形成持续优化闭环。</p>
+                      <h3>FAQ 沉淀</h3>
+                      <p>将高质量问答保存为可复用知识。</p>
                     </div>
                     <button id="save-faq-btn" class="button button-primary">保存</button>
                   </div>
@@ -321,7 +372,7 @@
         <div class="execution-card-header">
           <div>
             <span class="execution-action"></span>
-            <h4 class="execution-tool"></h4>
+            <h3 class="execution-tool"></h3>
           </div>
           <span class="execution-time"></span>
         </div>
@@ -343,14 +394,15 @@
         <div class="result-card-header">
           <div>
             <span class="result-type"></span>
-            <h4 class="result-title"></h4>
+            <h3 class="result-title"></h3>
           </div>
           <span class="result-status"></span>
         </div>
         <div class="result-fields"></div>
+        <div class="result-rich"></div>
       </article>
     </template>
 
-    <script src="/static/app.js" defer></script>
+    <script src="/static/app.js?v=20260707-workbench-3" defer></script>
   </body>
 </html>

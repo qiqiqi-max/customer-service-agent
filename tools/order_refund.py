@@ -11,8 +11,7 @@
 
 from typing import Callable
 
-from data import orders
-from data.orders import OrderStatus
+from business_services import get_business_service
 from pydantic import Field
 
 
@@ -28,18 +27,7 @@ def get_order_refund_fn(account_id: str) -> Callable:
         """
         Use this function when a refund is needed. User must provide the order ID.
         """
-        order = await orders.get_order(account_id, order_id)
-        if not order:
-            return "Order does not exist"
-
-        if order["status"] == OrderStatus.REFUNDED.value:
-            return "Order has already been refunded, cannot refund again"
-
-        success = await orders.update_order_status(
-            account_id, order_id, OrderStatus.REFUNDED, reason
-        )
-        if not success:
-            return "Refund failed"
-        return "Refund successful"
+        service = get_business_service()
+        return await service.refund_order(account_id, order_id, reason)
 
     return order_refund

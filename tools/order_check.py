@@ -2,7 +2,7 @@
 
 from typing import Callable
 
-from data import orders
+from business_services import get_business_service
 from pydantic import Field
 
 
@@ -15,12 +15,13 @@ def get_order_check_fn(account_id: str) -> Callable:
         Use this function to query order details. Returns detailed order information.
         If both order ID and product name are empty, returns all order information.
         """
+        service = get_business_service()
         if product:
-            return await orders.get_orders_by_product(account_id, product)
+            return await service.get_orders_by_product(account_id, product)
 
         if order_id:
-            return await orders.get_order(account_id, order_id)
+            return await service.get_order(account_id, order_id)
 
-        return await orders.get_all_orders(account_id)
+        return await service.get_all_orders(account_id)
 
     return order_check

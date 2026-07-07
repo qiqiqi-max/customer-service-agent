@@ -6,18 +6,18 @@ function Write-Step {
 }
 
 $running = Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -eq "python.exe" -and $_.CommandLine -like "*shop_assist*main.py*"
+    $_.Name -eq "python.exe" -and $_.CommandLine -like "*customer-service-agent*main.py*"
 }
 
 if (-not $running) {
-    Write-Step "No running shop_assist backend process found"
+    Write-Step "No running customer-service-agent backend process found"
     exit 0
 }
 
-Write-Step "Stopping shop_assist backend process"
+Write-Step "Stopping customer-service-agent backend process"
 foreach ($proc in $running) {
     Write-Host "Stopping PID $($proc.ProcessId)" -ForegroundColor Yellow
     Stop-Process -Id $proc.ProcessId -Force
 }
 
-Write-Host "shop_assist demo stopped." -ForegroundColor Green
+Write-Host "customer-service-agent demo stopped." -ForegroundColor Green

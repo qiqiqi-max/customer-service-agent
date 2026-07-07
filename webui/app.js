@@ -74,7 +74,10 @@ const ACTION_LABELS = {
   product_recommend: "导购推荐",
   order_check: "订单查询",
   package_track: "物流跟踪",
+  pack_track: "物流跟踪",
   order_refund: "退款退货",
+  dify_retrieval: "Dify 知识检索",
+  retrieval: "知识检索",
   retrieval_knowledge: "知识检索",
   knowledge: "知识检索",
 };
@@ -84,16 +87,18 @@ const DEFAULT_OUTPUTS = {
   nextQuestion: "这里会显示建议追问，帮助客服顺着上下文继续服务。",
   quality: "这里会显示最近一轮回复的质检结果与优化建议。",
   faq: "这里会显示 FAQ 保存结果，用于沉淀可复用知识。",
-  execution: "这里会展示知识检索与工具调用轨迹，便于排查和复盘。",
+  execution: "这里会展示知识检索、订单查询、物流跟踪等处理记录，便于排查和复盘。",
   results: "这里会展示订单、物流、退款或知识检索的结构化结果。",
 };
 
 const state = {
   products: [],
+  conversations: [],
   messages: [],
   executionRecords: [],
   resultCards: [],
   activeScenario: "sales",
+  conversationId: null,
   selectedProducts: new Set(),
   selectedFunctions: new Set(FUNCTION_OPTIONS.map((item) => item.key)),
 };
@@ -108,6 +113,12 @@ const refs = {
   modeLabel: document.getElementById("mode-label"),
   resultPill: document.getElementById("result-pill"),
   resultCards: document.getElementById("result-cards"),
+  contextAccount: document.getElementById("context-account"),
+  contextConversation: document.getElementById("context-conversation"),
+  contextIntent: document.getElementById("context-intent"),
+  contextStatus: document.getElementById("context-status"),
+  contextProduct: document.getElementById("context-product"),
+  contextKnowledge: document.getElementById("context-knowledge"),
   executionPill: document.getElementById("execution-pill"),
   latestActionName: document.getElementById("latest-action-name"),
   toolCallCount: document.getElementById("tool-call-count"),
@@ -115,6 +126,10 @@ const refs = {
   accountId: document.getElementById("account-id"),
   streamMode: document.getElementById("stream-mode"),
   productGrid: document.getElementById("product-grid"),
+  conversationPill: document.getElementById("conversation-pill"),
+  conversationList: document.getElementById("conversation-list"),
+  refreshConversations: document.getElementById("refresh-conversations"),
+  newConversation: document.getElementById("new-conversation"),
   functionGrid: document.getElementById("function-grid"),
   scenarioChips: document.getElementById("scenario-chips"),
   quickPrompts: document.getElementById("quick-prompts"),
@@ -150,14 +165,18 @@ document.addEventListener("DOMContentLoaded", () => {
   resetOutputs();
   renderExecutionTimeline();
   renderResultCards();
+  renderCustomerContext();
   syncOverviewStats();
   refreshHealth();
   loadProducts();
+  loadConversations();
 });
 
 function bindEvents() {
   refs.composerForm.addEventListener("submit", handleSendMessage);
   refs.clearChat.addEventListener("click", clearConversation);
+  refs.newConversation.addEventListener("click", clearConversation);
+  refs.refreshConversations.addEventListener("click", () => loadConversations());
   refs.summaryBtn.addEventListener("click", handleSummary);
   refs.nextQuestionBtn.addEventListener("click", handleNextQuestion);
   refs.qualityBtn.addEventListener("click", handleQualityInspection);
@@ -187,7 +206,7 @@ function switchTab(tabName) {
 function seedWelcomeMessage() {
   addMessage(
     "system",
-    "工作台已就绪。你可以先在左侧选择服务场景、能力范围和商品集合，再从中间区域发起一轮完整的客服对话。"
+    "接待台已准备好。左侧选择场景和商品范围，中间输入顾客问题，右侧会同步记录订单、物流和售后结果。"
   );
 }
 
@@ -270,7 +289,7 @@ async function refreshHealth() {
 async function loadProducts() {
   refs.productGrid.innerHTML = "<div class='output-box'>正在加载商品货架...</div>";
   try {
-    const response = await fetch("/api/v3/bots/chat/completions/products");
+    const response = await fetch("/api/products");
     if (!response.ok) {
       throw new Error("商品接口调用失败");
     }
@@ -324,6 +343,136 @@ function renderProducts() {
   syncOverviewStats();
 }
 
+async function loadConversations(options = {}) {
+  const { silent = false } = options;
+  if (!silent) {
+    refs.conversationList.innerHTML = "<div class='output-box'>正在加载历史会话...</div>";
+    refs.conversationPill.textContent = "加载中";
+  }
+
+  try {
+    const accountId = encodeURIComponent(refs.accountId.value.trim() || "100000");
+    const response = await fetch(`/api/conversations?limit=20&account_id=${accountId}`);
+    const payload = await parseJsonResponse(response);
+    if (!response.ok) {
+      throw new Error(extractError(payload));
+    }
+    state.conversations = Array.isArray(payload.conversations)
+      ? payload.conversations
+      : [];
+    renderConversationList();
+  } catch (error) {
+    refs.conversationList.innerHTML = `<div class="output-box has-content">历史会话加载失败：${escapeHtml(error.message)}</div>`;
+    refs.conversationPill.textContent = "加载失败";
+  }
+}
+
+function renderConversationList() {
+  refs.conversationList.innerHTML = "";
+  refs.conversationPill.textContent = `${state.conversations.length} 条`;
+
+  if (!state.conversations.length) {
+    refs.conversationList.innerHTML = "<div class='output-box'>暂无历史会话。</div>";
+    return;
+  }
+
+  state.conversations.forEach((conversation) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `conversation-item${
+      conversation.id === state.conversationId ? " is-active" : ""
+    }`;
+    button.innerHTML = `
+      <span class="conversation-item-title">${escapeHtml(conversation.title || "新会话")}</span>
+      <p class="conversation-item-last">${escapeHtml(
+        truncateText(conversation.last_message || "暂无消息", 64)
+      )}</p>
+      <span class="conversation-item-meta">${escapeHtml(
+        formatConversationTime(conversation.updated_at)
+      )} · ${escapeHtml(conversation.account_id || "unknown")}</span>
+    `;
+    button.addEventListener("click", () => openConversation(conversation.id));
+    refs.conversationList.appendChild(button);
+  });
+}
+
+async function openConversation(conversationId) {
+  if (!conversationId || conversationId === state.conversationId) {
+    return;
+  }
+
+  setConversationButtons(true);
+  try {
+    const accountId = encodeURIComponent(refs.accountId.value.trim() || "100000");
+    const response = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}?account_id=${accountId}`
+    );
+    const payload = await parseJsonResponse(response);
+    if (!response.ok) {
+      throw new Error(extractError(payload));
+    }
+    restoreConversation(payload);
+  } catch (error) {
+    addMessage("system", `历史会话恢复失败：${error.message}`);
+  } finally {
+    setConversationButtons(false);
+  }
+}
+
+function restoreConversation(conversation) {
+  state.conversationId = conversation.id || null;
+  state.messages = Array.isArray(conversation.messages)
+    ? conversation.messages
+        .filter((message) => message.role && message.content)
+        .map((message) => ({
+          role: message.role,
+          content: message.content,
+          metadata: message.metadata || {},
+        }))
+    : [];
+
+  if (conversation.account_id) {
+    refs.accountId.value = conversation.account_id;
+  }
+
+  refs.chatThread.innerHTML = "";
+  if (!state.messages.length) {
+    seedWelcomeMessage();
+  } else {
+    state.messages.forEach((message) => addMessage(message.role, message.content));
+  }
+
+  rebuildConversationInsights();
+  resetOutputs();
+  updateMessageCount();
+  renderConversationList();
+  switchTab("results");
+}
+
+function rebuildConversationInsights() {
+  const records = [];
+  const cards = [];
+
+  [...state.messages].reverse().forEach((message) => {
+    const botUsage = message.metadata?.bot_usage;
+    records.push(...normalizeBotUsage(botUsage));
+    cards.push(...normalizeResultCards(botUsage));
+  });
+
+  state.executionRecords = records.slice(0, 12);
+  state.resultCards = cards.slice(0, 8);
+  renderExecutionTimeline();
+  renderResultCards();
+}
+
+function setConversationButtons(disabled) {
+  refs.refreshConversations.disabled = disabled;
+  refs.newConversation.disabled = disabled;
+  refs.conversationList.querySelectorAll("button").forEach((button) => {
+    button.disabled = disabled;
+  });
+}
+
 async function handleSendMessage(event) {
   event.preventDefault();
   const content = refs.composerInput.value.trim();
@@ -332,6 +481,7 @@ async function handleSendMessage(event) {
     return;
   }
 
+  const previousMessages = [...state.messages];
   const userMessage = { role: "user", content };
   state.messages.push(userMessage);
   addMessage("user", content);
@@ -339,28 +489,46 @@ async function handleSendMessage(event) {
   updateMessageCount();
 
   const assistantNode = addMessage("assistant", "正在生成回复...");
-  const body = {
+  const accountId = refs.accountId.value.trim() || "100000";
+  const selectedFunctions = Array.from(state.selectedFunctions);
+  const selectedProducts = Array.from(state.selectedProducts);
+  const legacyBody = {
     stream: refs.streamMode.checked,
     model: "shop-assist-demo",
     metadata: {
-      account_id: refs.accountId.value.trim() || "100000",
-      support_functions: Array.from(state.selectedFunctions),
-      product_list: Array.from(state.selectedProducts),
+      account_id: accountId,
+      ...(state.conversationId ? { conversation_id: state.conversationId } : {}),
+      support_functions: selectedFunctions,
+      product_list: selectedProducts,
     },
     messages: state.messages,
+  };
+  const businessBody = {
+    message: content,
+    account_id: accountId,
+    ...(state.conversationId ? { conversation_id: state.conversationId } : {}),
+    support_functions: selectedFunctions,
+    product_list: selectedProducts,
+    history: previousMessages,
+    model: "customer-service-agent",
   };
 
   setActionState(true);
   try {
     const result = refs.streamMode.checked
-      ? await streamChat(body, assistantNode)
-      : await requestChat(body);
+      ? await streamChat(legacyBody, assistantNode)
+      : await requestChat(businessBody);
     const text = result.content || "模型未返回内容。";
+    const conversationId = result.conversationId || result.metadata?.conversation_id;
+    if (conversationId) {
+      state.conversationId = conversationId;
+    }
     replaceMessageBody(assistantNode, text);
     state.messages.push({ role: "assistant", content: text });
     updateExecutionTimeline(result.botUsage);
     updateResultCards(result.botUsage);
     updateMessageCount();
+    await loadConversations({ silent: true });
   } catch (error) {
     const message = `请求失败：${error.message}`;
     replaceMessageBody(assistantNode, message);
@@ -372,7 +540,7 @@ async function handleSendMessage(event) {
 }
 
 async function requestChat(body) {
-  const response = await fetch("/api/v3/bots/chat/completions", {
+  const response = await fetch("/api/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -384,8 +552,10 @@ async function requestChat(body) {
     throw new Error(extractError(payload));
   }
   return {
-    content: extractContent(payload) || "模型未返回内容。",
+    content: payload?.answer || extractContent(payload) || "模型未返回内容。",
     botUsage: payload?.bot_usage ?? null,
+    metadata: payload?.metadata ?? null,
+    conversationId: payload?.conversation_id ?? payload?.metadata?.conversation_id ?? null,
   };
 }
 
@@ -414,6 +584,7 @@ async function streamChat(body, assistantNode) {
   let buffer = "";
   let fullText = "";
   let latestBotUsage = null;
+  let latestMetadata = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -441,6 +612,9 @@ async function streamChat(body, assistantNode) {
           if (payload?.bot_usage) {
             latestBotUsage = payload.bot_usage;
           }
+          if (payload?.metadata) {
+            latestMetadata = payload.metadata;
+          }
           const delta =
             payload?.choices?.[0]?.delta?.content ??
             payload?.choices?.[0]?.message?.content ??
@@ -461,6 +635,8 @@ async function streamChat(body, assistantNode) {
   return {
     content: fullText || "模型未返回内容。",
     botUsage: latestBotUsage,
+    metadata: latestMetadata,
+    conversationId: latestMetadata?.conversation_id ?? null,
   };
 }
 
@@ -471,10 +647,9 @@ async function handleSummary() {
     return;
   }
   switchTab("ops");
-  await runUtility(refs.summaryBtn, refs.summaryOutput, "/api/v3/bots/chat/completions/summary", {
-    stream: false,
-    model: "shop-assist-demo",
+  await runUtility(refs.summaryBtn, refs.summaryOutput, "/api/summary", {
     messages: state.messages,
+    model: "customer-service-agent",
   });
 }
 
@@ -506,20 +681,18 @@ async function handleQualityInspection() {
   }
 
   const keywords = refs.qualityKeywords.value.trim();
-  const content = keywords
-    ? `【客服会话】\n${transcript}\n\n【质检关键词】\n${keywords}`
-    : `【客服会话】\n${transcript}`;
 
   switchTab("ops");
   await runUtility(
     refs.qualityBtn,
     refs.qualityOutput,
-    "/api/v3/bots/chat/completions/quality_inspection",
+    "/api/quality-check",
     {
-      stream: false,
-      model: "shop-assist-demo",
-      messages: [{ role: "user", content }],
-    }
+      content: transcript,
+      keywords,
+      model: "customer-service-agent",
+    },
+    formatQualityOutput
   );
 }
 
@@ -538,7 +711,7 @@ async function handleSaveFaq() {
   switchTab("ops");
   toggleButton(refs.saveFaqBtn, true);
   try {
-    const response = await fetch("/api/v3/bots/chat/completions/save_faq", {
+    const response = await fetch("/api/faqs", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -562,7 +735,7 @@ async function handleSaveFaq() {
   }
 }
 
-async function runUtility(button, outputNode, url, body) {
+async function runUtility(button, outputNode, url, body, formatter = null) {
   toggleButton(button, true);
   updateOutput(outputNode, "处理中...");
   try {
@@ -577,7 +750,16 @@ async function runUtility(button, outputNode, url, body) {
     if (!response.ok) {
       throw new Error(extractError(payload));
     }
-    updateOutput(outputNode, extractContent(payload) || "未返回内容。");
+    if (formatter) {
+      const formatted = formatter(payload);
+      if (formatted.html) {
+        updateOutputHtml(outputNode, formatted.html);
+      } else {
+        updateOutput(outputNode, formatted.text || "未返回内容。");
+      }
+    } else {
+      updateOutput(outputNode, extractContent(payload) || "未返回内容。");
+    }
   } catch (error) {
     updateOutput(outputNode, `请求失败：${error.message}`);
   } finally {
@@ -589,12 +771,15 @@ function clearConversation() {
   state.messages = [];
   state.executionRecords = [];
   state.resultCards = [];
+  state.conversationId = null;
   refs.chatThread.innerHTML = "";
   seedWelcomeMessage();
   updateMessageCount();
   resetOutputs();
   renderExecutionTimeline();
   renderResultCards();
+  renderCustomerContext();
+  renderConversationList();
   switchTab("results");
 }
 
@@ -619,6 +804,11 @@ function updateOutput(node, text, hasContent = true) {
   node.classList.toggle("has-content", hasContent);
 }
 
+function updateOutputHtml(node, html, hasContent = true) {
+  node.innerHTML = html;
+  node.classList.toggle("has-content", hasContent);
+}
+
 function updateMessageCount() {
   refs.messageCount.textContent = String(state.messages.length);
 }
@@ -635,7 +825,9 @@ function setActionState(disabled) {
     refs.saveFaqBtn,
     refs.clearChat,
     refs.composerSubmit,
-  ].forEach((button) => {
+    refs.refreshConversations,
+    refs.newConversation,
+  ].filter(Boolean).forEach((button) => {
     button.disabled = disabled;
   });
   refs.composerInput.disabled = disabled;
@@ -651,7 +843,7 @@ function syncOverviewStats() {
   refs.productPill.textContent = state.products.length
     ? `${selectedProductCount}/${state.products.length} 项已选`
     : "加载中";
-  refs.modeLabel.textContent = refs.streamMode.checked ? "Streaming" : "Single Shot";
+  refs.modeLabel.textContent = refs.streamMode.checked ? "逐字" : "完整";
 }
 
 function getActiveScenario() {
@@ -703,6 +895,7 @@ function updateResultCards(botUsage) {
   }
   state.resultCards = [...cards, ...state.resultCards].slice(0, 8);
   renderResultCards();
+  renderCustomerContext();
   switchTab("results");
 }
 
@@ -711,6 +904,7 @@ function renderResultCards() {
   if (!state.resultCards.length) {
     refs.resultCards.innerHTML = `<div class="output-box">${DEFAULT_OUTPUTS.results}</div>`;
     refs.resultPill.textContent = "暂无结果";
+    renderCustomerContext();
     return;
   }
 
@@ -727,18 +921,56 @@ function renderResultCards() {
       fieldNode.innerHTML = `<span>${escapeHtml(field.label)}</span><p>${escapeHtml(field.value)}</p>`;
       fieldsNode.appendChild(fieldNode);
     });
+    const richNode = fragment.querySelector(".result-rich");
+    if (card.richHtml) {
+      richNode.innerHTML = card.richHtml;
+    } else {
+      richNode.remove();
+    }
     refs.resultCards.appendChild(fragment);
   });
+  renderCustomerContext();
+}
+
+function renderCustomerContext() {
+  if (!refs.contextAccount) {
+    return;
+  }
+
+  const lastUserMessage = [...state.messages]
+    .reverse()
+    .find((message) => message.role === "user");
+  const latestCard = state.resultCards[0];
+  const latestOrderCard = state.resultCards.find((card) => card.type === "订单");
+  const latestKnowledgeCard = state.resultCards.find((card) => card.type === "知识");
+  const latestProduct =
+    latestCard?.summary?.product ||
+    latestOrderCard?.summary?.product ||
+    detectProductFromText(lastUserMessage?.content);
+  const knowledgeCount = state.resultCards
+    .filter((card) => card.type === "知识")
+    .reduce((total, card) => total + (card.summary?.count || 0), 0);
+
+  refs.contextAccount.textContent = refs.accountId.value.trim() || "100000";
+  refs.contextConversation.textContent = state.conversationId ? "已保存会话" : "新会话";
+  refs.contextIntent.textContent = lastUserMessage
+    ? inferIntentLabel(lastUserMessage.content)
+    : "尚未开始";
+  refs.contextStatus.textContent = latestCard
+    ? `${latestCard.type} · ${latestCard.status}`
+    : "等待消息";
+  refs.contextProduct.textContent = latestProduct || "暂无";
+  refs.contextKnowledge.textContent = `${knowledgeCount} 条`;
 }
 
 function getRoleLabel(role) {
   if (role === "user") {
-    return "客户";
+    return "顾客";
   }
   if (role === "assistant") {
-    return "Agent";
+    return "客服助手";
   }
-  return "系统";
+  return "记录";
 }
 
 function buildTranscript() {
@@ -754,10 +986,83 @@ function extractContent(payload) {
     payload?.choices?.[0]?.delta?.content ??
     payload?.message?.content ??
     payload?.content ??
+    payload?.answer ??
     payload?.summary ??
     payload?.result ??
     ""
   );
+}
+
+function formatQualityOutput(payload) {
+  const structured = payload?.structured_result;
+  if (!structured) {
+    return { text: extractContent(payload) || "未返回内容。" };
+  }
+
+  const hits = Array.isArray(structured.hits) ? structured.hits : [];
+  const suggestions = Array.isArray(structured.suggestions)
+    ? structured.suggestions
+    : [];
+  const riskLevel = structured.risk_level || "none";
+  const hitMarkup = hits.length
+    ? hits
+        .slice(0, 10)
+        .map(
+          (hit) =>
+            `<span class="risk-hit is-${escapeHtml(hit.severity || "low")}">${escapeHtml(
+              hit.keyword || hit.evidence || "命中词"
+            )}</span>`
+        )
+        .join("")
+    : `<span class="risk-hit is-none">未命中风险词</span>`;
+  const suggestionMarkup = suggestions.length
+    ? suggestions
+        .slice(0, 4)
+        .map((suggestion) => `<li>${escapeHtml(suggestion)}</li>`)
+        .join("")
+    : "<li>未发现明显风险，保持礼貌、准确、可验证的表达。</li>";
+  const modelNote = extractContent(payload);
+
+  return {
+    html: `
+      <div class="risk-summary">
+        <div class="risk-summary-head">
+          <span class="risk-level is-${escapeHtml(riskLevel)}">${escapeHtml(
+            getRiskLevelLabel(riskLevel)
+          )}</span>
+          <span class="risk-score">风险分 ${escapeHtml(
+            structured.risk_score ?? 0
+          )} · 命中 ${escapeHtml(structured.hit_count ?? hits.length)} 项</span>
+        </div>
+        <div class="risk-section">
+          <strong>命中词</strong>
+          <div class="risk-hit-list">${hitMarkup}</div>
+        </div>
+        <div class="risk-section">
+          <strong>处理建议</strong>
+          <ul class="risk-suggestions">${suggestionMarkup}</ul>
+        </div>
+        ${
+          modelNote
+            ? `<p class="risk-model-note">${escapeHtml(modelNote)}</p>`
+            : ""
+        }
+      </div>
+    `,
+  };
+}
+
+function getRiskLevelLabel(level) {
+  if (level === "high") {
+    return "高风险";
+  }
+  if (level === "medium") {
+    return "中风险";
+  }
+  if (level === "low") {
+    return "低风险";
+  }
+  return "无明显风险";
 }
 
 function extractError(payload) {
@@ -848,19 +1153,53 @@ function normalizeResultCards(botUsage) {
 function buildResultCard(actionName, toolName, output) {
   const prettyAction = prettifyLabel(actionName);
   const prettyTool = prettifyLabel(toolName);
+  const rawTool = String(toolName || "").toLowerCase();
+  const rawAction = String(actionName || "").toLowerCase();
 
   if (Array.isArray(output)) {
+    if (!output.length && isKnowledgeTool(rawAction, rawTool)) {
+      return {
+        type: "知识",
+        title: `${prettyTool} 未命中`,
+        status: "暂无资料",
+        fields: [
+          {
+            label: "处理建议",
+            value: "知识库没有返回相关片段，本轮回复应避免编造，并引导用户补充信息或转人工。",
+          },
+        ],
+      };
+    }
+
     if (output.length && isPlainObject(output[0]) && "order_id" in output[0]) {
       const firstOrder = output[0];
       return {
         type: "订单",
         title: `${prettyTool} 返回 ${output.length} 条订单`,
         status: firstOrder.status || "已返回",
+        summary: {
+          count: output.length,
+          product: firstOrder.product || "",
+        },
         fields: [
           { label: "首条订单号", value: firstOrder.order_id || "未知" },
           { label: "商品", value: firstOrder.product || "未知" },
           { label: "账户", value: firstOrder.account_id || "未知" },
         ],
+        richHtml: renderOrderList(output),
+      };
+    }
+
+    if (output.length && isKnowledgeRecord(output[0])) {
+      return {
+        type: "知识",
+        title: `${prettyTool} 命中 ${output.length} 条知识`,
+        status: formatKnowledgeStatus(output[0]),
+        summary: {
+          count: output.length,
+        },
+        fields: buildKnowledgeFields(output),
+        richHtml: renderKnowledgeList(output),
       };
     }
 
@@ -880,15 +1219,37 @@ function buildResultCard(actionName, toolName, output) {
   if (isPlainObject(output) && "tracking_number" in output) {
     const events = Array.isArray(output.events) ? output.events : [];
     const latest = events[events.length - 1];
-    return {
-      type: "物流",
-      title: prettyTool,
-      status: output.current_status || "物流处理中",
-      fields: [
-        { label: "运单号", value: output.tracking_number || "未知" },
+      return {
+        type: "物流",
+        title: prettyTool,
+        status: formatStatusLabel(output.current_status || "物流处理中"),
+        summary: {
+          count: events.length,
+        },
+        fields: [
+          { label: "运单号", value: output.tracking_number || "未知" },
         { label: "最新节点", value: latest?.description || "暂无节点" },
         { label: "位置", value: latest?.location || "未知" },
       ],
+      richHtml: renderTrackingTimeline(events),
+    };
+  }
+
+  if (isPlainObject(output) && "message" in output && "order" in output) {
+    const order = isPlainObject(output.order) ? output.order : {};
+    return {
+      type: "售后",
+      title: prettyTool,
+      status: String(output.message || "").includes("successful") ? "退款成功" : "已返回结果",
+      summary: {
+        product: order.product || "",
+      },
+      fields: [
+        { label: "处理结果", value: output.message || "已返回" },
+        { label: "订单号", value: order.order_id || "未知" },
+        { label: "商品", value: order.product || "未知" },
+      ],
+      richHtml: renderRefundStatus(output),
     };
   }
 
@@ -897,11 +1258,15 @@ function buildResultCard(actionName, toolName, output) {
       type: "订单",
       title: prettyTool,
       status: output.status || "已返回",
+      summary: {
+        product: output.product || "",
+      },
       fields: [
         { label: "订单号", value: output.order_id || "未知" },
         { label: "商品", value: output.product || "未知" },
         { label: "账户", value: output.account_id || "未知" },
       ],
+      richHtml: renderOrderList([output]),
     };
   }
 
@@ -935,6 +1300,188 @@ function buildResultCard(actionName, toolName, output) {
   }
 
   return null;
+}
+
+function renderOrderList(orders) {
+  const rows = orders
+    .slice(0, 5)
+    .map((order) => {
+      const statusClass = getStatusClass(order.status);
+      return `
+        <div class="order-row">
+          <div>
+            <strong>${escapeHtml(order.order_id || "未知订单")}</strong>
+            <span>${escapeHtml(order.product || "未知商品")}</span>
+          </div>
+          <div>
+            <span class="status-badge ${statusClass}">${escapeHtml(formatStatusLabel(order.status || "未知状态"))}</span>
+            <small>${escapeHtml(order.tracking_number || "暂无运单号")}</small>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+  const more = orders.length > 5
+    ? `<div class="rich-note">还有 ${escapeHtml(orders.length - 5)} 条订单，可在执行轨迹查看完整输出。</div>`
+    : "";
+  return `<div class="order-list">${rows}${more}</div>`;
+}
+
+function renderTrackingTimeline(events) {
+  if (!events.length) {
+    return `<div class="rich-note">暂未返回物流节点。</div>`;
+  }
+
+  const items = events
+    .slice(-5)
+    .reverse()
+    .map((event, index) => `
+      <div class="tracking-node${index === 0 ? " is-latest" : ""}">
+      <div class="tracking-marker"></div>
+      <div>
+        <div class="tracking-head">
+            <strong>${escapeHtml(formatStatusLabel(event.status || "物流节点"))}</strong>
+            <span>${escapeHtml(event.time || "")}</span>
+          </div>
+          <p>${escapeHtml(event.description || "暂无描述")}</p>
+          <small>${escapeHtml(event.location || "未知位置")}</small>
+        </div>
+      </div>
+    `)
+    .join("");
+
+  return `<div class="tracking-timeline">${items}</div>`;
+}
+
+function renderKnowledgeList(records) {
+  const items = records
+    .slice(0, 4)
+    .map((record) => {
+      const title = record.document_name || record.document_id || record.dataset_id || "知识片段";
+      const score = record.score == null ? "" : `<span>${escapeHtml(formatScore(record.score))}</span>`;
+      return `
+        <div class="knowledge-hit">
+          <div>
+            <strong>${escapeHtml(title)}</strong>
+            ${score}
+          </div>
+          <p>${escapeHtml(truncateText(record.content || summarizeValue(record), 140))}</p>
+        </div>
+      `;
+    })
+    .join("");
+  return `<div class="knowledge-list">${items}</div>`;
+}
+
+function renderRefundStatus(output) {
+  const order = isPlainObject(output.order) ? output.order : {};
+  return `
+    <div class="refund-panel">
+      <span class="status-badge ${getStatusClass(order.status || output.message)}">
+        ${escapeHtml(formatStatusLabel(order.status || output.message || "已处理"))}
+      </span>
+      <div>
+        <strong>${escapeHtml(order.order_id || "未知订单")}</strong>
+        <p>${escapeHtml(order.reason || "暂无退款原因")}</p>
+      </div>
+    </div>
+  `;
+}
+
+function inferIntentLabel(text = "") {
+  const content = String(text);
+  if (/退款|退货|售后|refund|return/i.test(content)) {
+    return "售后处理";
+  }
+  if (/物流|快递|运单|送到|shipping|delivery|track/i.test(content)) {
+    return "物流咨询";
+  }
+  if (/订单|买过|下单|order|purchased/i.test(content)) {
+    return "订单查询";
+  }
+  if (/推荐|适合|哪个好|recommend/i.test(content)) {
+    return "导购推荐";
+  }
+  return "普通咨询";
+}
+
+function detectProductFromText(text = "") {
+  const content = String(text);
+  const matched = state.products.find((product) => content.includes(product.name));
+  return matched?.name || "";
+}
+
+function getStatusClass(status = "") {
+  const value = String(status).toLowerCase();
+  if (/退款|refunded|成功|successful/.test(value)) {
+    return "is-success";
+  }
+  if (/未发货|pending|等待|not shipped/.test(value)) {
+    return "is-warning";
+  }
+  if (/失败|failed|不存在|not found/.test(value)) {
+    return "is-danger";
+  }
+  return "is-info";
+}
+
+function formatStatusLabel(status = "") {
+  const value = String(status || "");
+  const enumName = value.match(/^TrackingStatus\.(\w+)$/)?.[1];
+  const enumLabels = {
+    PENDING: "待揽收",
+    PICKED_UP: "已揽收",
+    IN_TRANSIT: "运输中",
+    DELIVERING: "派送中",
+    DELIVERED: "已签收",
+  };
+  return enumName ? enumLabels[enumName] || enumName : value;
+}
+
+function isKnowledgeTool(actionName, toolName) {
+  return /knowledge|retrieval|dify/.test(`${actionName} ${toolName}`);
+}
+
+function isKnowledgeRecord(value) {
+  return (
+    isPlainObject(value) &&
+    ("content" in value || "document_name" in value || "score" in value || "dataset_id" in value)
+  );
+}
+
+function formatKnowledgeStatus(record) {
+  if (record?.score == null) {
+    return record?.document_name || "已命中";
+  }
+  return `相关度 ${formatScore(record.score)}`;
+}
+
+function buildKnowledgeFields(records) {
+  const fields = records.slice(0, 3).map((record, index) => {
+    const source = record.document_name || record.document_id || record.dataset_id || `片段 ${index + 1}`;
+    const score = record.score == null ? "" : ` · ${formatScore(record.score)}`;
+    return {
+      label: `${source}${score}`,
+      value: record.content || summarizeValue(record),
+    };
+  });
+
+  if (records.length > 3) {
+    fields.push({
+      label: "更多命中",
+      value: `还有 ${records.length - 3} 条知识片段，可在执行轨迹中查看完整输出。`,
+    });
+  }
+
+  return fields;
+}
+
+function formatScore(score) {
+  const numeric = Number(score);
+  if (Number.isNaN(numeric)) {
+    return String(score);
+  }
+  return numeric <= 1 ? `${Math.round(numeric * 100)}%` : numeric.toFixed(2);
 }
 
 function summarizeValue(value) {
@@ -983,6 +1530,20 @@ function formatTimestamp(timestamp) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+  });
+}
+
+function formatConversationTime(timestamp) {
+  const numeric = Number(timestamp);
+  const date = new Date(numeric < 1000000000000 ? numeric * 1000 : numeric);
+  if (Number.isNaN(date.getTime())) {
+    return "刚刚";
+  }
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 

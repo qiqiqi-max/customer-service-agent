@@ -51,7 +51,7 @@ This guide explains how to deploy and run the ShopAssist application locally.
 3. Download the code repository.
 ```shell
 git clone https://github.com/volcengine/ai-app-lab.git
-cd demohouse/shop_assist/backend
+cd customer-service-agent/backend
 ```
 4. Set the environment variables. You can refer to the Environment Setup section for details on the required values.
 ```shell

@@ -11,13 +11,14 @@
 
 from typing import AsyncIterable
 
-from config import endpoint_id, language
+from config import endpoint_id, language, mock_mode
+from llm_provider import is_openai_compatible_provider, run_openai_compatible_chat
+from mock_agent import make_mock_next_question_response
 from utils import get_auth_header, merge_msgs
 
 from arkitect.core.component.llm import BaseChatLanguageModel
 from arkitect.telemetry.trace import task
 from arkitect.types.llm.model import (
-    ArkChatParameters,
     ArkChatRequest,
     ArkMessage,
     Response,
@@ -29,6 +30,10 @@ async def next_question_chat(request: ArkChatRequest) -> AsyncIterable[Response]
     """
     Summarize the conversation between customer service and customer.
     """
+    if mock_mode:
+        yield make_mock_next_question_response(request)
+        return
+
     # Chinese system prompt
     system_prompt_zh = """# 角色
 你是一位在抖音车载用品网店购物的潜在消费者，正在与客服进行口语化的文字交流。现在收到的输入是，你（user）与客服（assistant）正在进行对话
@@ -87,6 +92,10 @@ Order number inquiry.
         ArkMessage(role="system", content=system_prompt),
         merge_msgs(request.messages),
     ]
+
+    if is_openai_compatible_provider():
+        yield await run_openai_compatible_chat(messages)
+        return
 
     llm = BaseChatLanguageModel(
         model=endpoint_id,

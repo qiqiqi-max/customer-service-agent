@@ -3,7 +3,6 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $envFile = Join-Path $scriptDir ".env.local"
 $pythonExe = Join-Path $scriptDir ".venv\Scripts\python.exe"
-$url = "http://127.0.0.1:8080/demo"
 
 function Write-Step {
     param([string]$Message)
@@ -31,6 +30,42 @@ function Load-EnvFile {
 }
 
 function Test-RequiredEnv {
+    $mockMode = [System.Environment]::GetEnvironmentVariable("MOCK_MODE", "Process")
+    if ($mockMode -and $mockMode.ToLower() -in @("true", "1", "t", "yes")) {
+        return
+    }
+
+    $knowledgeProvider = [System.Environment]::GetEnvironmentVariable("KNOWLEDGE_PROVIDER", "Process")
+    if ($knowledgeProvider -and $knowledgeProvider.ToLower() -eq "dify") {
+        $missingKnowledge = @()
+        if (-not [System.Environment]::GetEnvironmentVariable("DIFY_API_KEY", "Process")) {
+            $missingKnowledge += "DIFY_API_KEY"
+        }
+        if (-not [System.Environment]::GetEnvironmentVariable("DIFY_DATASET_ID", "Process")) {
+            $missingKnowledge += "DIFY_DATASET_ID"
+        }
+        if ($missingKnowledge.Count -gt 0) {
+            throw "Missing required environment variables: $($missingKnowledge -join ', ')"
+        }
+    }
+
+    $provider = [System.Environment]::GetEnvironmentVariable("LLM_PROVIDER", "Process")
+    if ($provider -and $provider.ToLower() -in @("deepseek", "openai_compatible")) {
+        if (-not [System.Environment]::GetEnvironmentVariable("DEEPSEEK_API_KEY", "Process")) {
+            throw "Missing required environment variables: DEEPSEEK_API_KEY"
+        }
+        return
+    }
+
+    if ($provider -and $provider.ToLower() -eq "zhipu") {
+        $zhipuKey = [System.Environment]::GetEnvironmentVariable("ZHIPU_API_KEY", "Process")
+        $zaiKey = [System.Environment]::GetEnvironmentVariable("ZAI_API_KEY", "Process")
+        if (-not $zhipuKey -and -not $zaiKey) {
+            throw "Missing required environment variables: ZHIPU_API_KEY"
+        }
+        return
+    }
+
     $required = @(
         "VOLC_ACCESSKEY",
         "VOLC_SECRETKEY",
@@ -89,13 +124,18 @@ if (-not (Test-Path $envFile)) {
 Write-Step "Loading local environment variables from .env.local"
 Load-EnvFile -Path $envFile
 Test-RequiredEnv
+$port = [System.Environment]::GetEnvironmentVariable("_FAAS_RUNTIME_PORT", "Process")
+if (-not $port) {
+    $port = "8080"
+}
+$url = "http://127.0.0.1:$port/demo"
 
 $running = Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -eq "python.exe" -and $_.CommandLine -like "*shop_assist*main.py*"
+    $_.Name -eq "python.exe" -and $_.CommandLine -like "*customer-service-agent*main.py*"
 }
 
 if ($running) {
-    Write-Step "Detected an existing shop_assist service. Stopping old process first"
+    Write-Step "Detected an existing customer-service-agent service. Stopping old process first"
     foreach ($proc in $running) {
         Stop-Process -Id $proc.ProcessId -Force
     }
@@ -107,7 +147,7 @@ $process = Start-Process -FilePath $pythonExe -ArgumentList "main.py" -WorkingDi
 
 try {
     Write-Step "Waiting for health check"
-    Wait-ForService -HealthUrl "http://127.0.0.1:8080/v1/ping"
+    Wait-ForService -HealthUrl "http://127.0.0.1:$port/v1/ping"
     Write-Step "Service is ready"
     Write-Host ""
     Write-Host "Demo URL: $url" -ForegroundColor Green
