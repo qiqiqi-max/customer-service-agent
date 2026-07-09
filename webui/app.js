@@ -83,12 +83,12 @@ const ACTION_LABELS = {
 };
 
 const DEFAULT_OUTPUTS = {
-  summary: "会话总结会显示在这里，用于沉淀客服处理结论与用户诉求。",
-  nextQuestion: "这里会显示建议追问，帮助客服顺着上下文继续服务。",
-  quality: "这里会显示最近一轮回复的质检结果与优化建议。",
-  faq: "这里会显示 FAQ 保存结果，用于沉淀可复用知识。",
-  execution: "这里会展示知识检索、订单查询、物流跟踪等处理记录，便于排查和复盘。",
-  results: "这里会展示订单、物流、退款或知识检索的结构化结果。",
+  summary: "暂无会话总结。",
+  nextQuestion: "暂无追问建议。",
+  quality: "暂无质检记录。",
+  faq: "暂无 FAQ 沉淀。",
+  execution: "暂无处理轨迹。",
+  results: "暂无工单结果。",
 };
 
 const state = {
@@ -214,7 +214,7 @@ function switchTab(tabName) {
 function seedWelcomeMessage() {
   addMessage(
     "system",
-    "接待台已准备好。左侧选择场景和商品范围，中间输入顾客问题，右侧会同步记录订单、物流和售后结果。"
+    "当前接待已准备。选择场景和商品范围后，可以直接处理顾客消息。"
   );
 }
 
@@ -997,7 +997,7 @@ function getRoleLabel(role) {
     return "顾客";
   }
   if (role === "assistant") {
-    return "客服助手";
+    return "客服";
   }
   return "记录";
 }

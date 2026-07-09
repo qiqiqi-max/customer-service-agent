@@ -8,13 +8,7 @@
       name="description"
       content="面向电商售前、订单、物流与售后的客服接待工作站。"
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/static/styles.css?v=20260709-workbench-4" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260709-workbench-6" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%231f241f'/%3E%3Crect x='12' y='14' width='40' height='36' rx='6' fill='%23f7f5ef'/%3E%3Cpath d='M20 25h24M20 33h18M20 41h24' stroke='%231d6f50' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
@@ -49,7 +43,7 @@
             <label class="switch-row">
               <div>
                 <span>逐字显示</span>
-                <small>适合观察回复过程，关闭后一次性返回完整内容。</small>
+                <small>开启后实时返回。</small>
               </div>
               <input id="stream-mode" type="checkbox" checked />
             </label>
@@ -100,28 +94,28 @@
       <main class="main-panel">
         <header class="topbar">
           <div class="topbar-copy">
-            <span class="eyebrow">今日接待</span>
-            <h1>接待中心</h1>
+            <span class="eyebrow">在线接待</span>
+            <h1>客服工单台</h1>
             <p class="topbar-subtitle">
-              按客户、商品、订单与售后记录组织对话，让每一次接待都有上下文、有结果、有复盘。
+              车载用品店 · 白班接待 · Mock 数据演示
             </p>
           </div>
 
           <div class="topbar-stats" aria-label="工作台概览">
             <div class="stat-card">
-              <span>会话消息</span>
+              <span>消息</span>
               <strong id="message-count">0</strong>
             </div>
             <div class="stat-card">
-              <span>开启权限</span>
+              <span>权限</span>
               <strong id="active-capability-count">0</strong>
             </div>
             <div class="stat-card">
-              <span>选中商品</span>
+              <span>商品</span>
               <strong id="selected-product-count">0</strong>
             </div>
             <div class="stat-card">
-              <span>回复方式</span>
+              <span>回复</span>
               <strong id="mode-label">逐字</strong>
             </div>
           </div>
@@ -129,7 +123,7 @@
 
         <section class="workbench-strip" aria-label="当前接待摘要">
           <div class="strip-item">
-            <span>当前账号</span>
+            <span>客户账号</span>
             <strong id="desk-account">100000</strong>
           </div>
           <div class="strip-item">
@@ -150,9 +144,9 @@
           <section class="conversation-panel">
             <section class="intro-panel">
               <div class="intro-copy">
-                <span class="panel-kicker">接待入口</span>
-                <h2>常用问题</h2>
-                <p>选择一句常见咨询，或直接在下方输入顾客问题。</p>
+                <span class="panel-kicker">快捷填充</span>
+                <h2>待发送话术</h2>
+                <p>售前 / 订单 / 物流 / 售后</p>
               </div>
               <div id="quick-prompts" class="prompt-grid"></div>
             </section>
@@ -181,7 +175,7 @@
                 </label>
                 <div class="composer-footer">
                   <p class="composer-tip">
-                    右侧同步更新客户档案、处理结果和质检沉淀。
+                    当前接待信息实时更新。
                   </p>
                   <button id="composer-submit" type="submit" class="button button-primary">
                     发送消息
@@ -201,7 +195,7 @@
                   role="tab"
                   aria-selected="true"
                 >
-                  工单结果
+                  结果
                 </button>
                 <button
                   type="button"
@@ -210,7 +204,7 @@
                   role="tab"
                   aria-selected="false"
                 >
-                  处理记录
+                  轨迹
                 </button>
                 <button
                   type="button"
@@ -219,7 +213,7 @@
                   role="tab"
                   aria-selected="false"
                 >
-                  复盘沉淀
+                  沉淀
                 </button>
               </div>
 
@@ -260,7 +254,7 @@
                 </section>
                 <div id="result-cards" class="result-cards">
                   <div class="empty-state">
-                    订单信息、物流节点、退款处理与知识检索摘要会在这里汇总。
+                    暂无工单结果。
                   </div>
                 </div>
               </div>
@@ -285,7 +279,7 @@
                 </div>
                 <div id="execution-timeline" class="execution-timeline">
                   <div class="empty-state">
-                    知识检索、订单查询、物流跟踪等处理记录会显示在这里。
+                    暂无处理轨迹。
                   </div>
                 </div>
               </div>
@@ -296,19 +290,19 @@
                     <span class="panel-kicker">复盘沉淀</span>
                     <h2>服务资产</h2>
                   </div>
-                  <span class="panel-meta">用于后续复用</span>
+                  <span class="panel-meta">当前会话</span>
                 </div>
 
                 <article class="ops-card">
                   <div class="ops-head">
                     <div>
                       <h3>会话总结</h3>
-                      <p>提炼用户诉求、处理结果和后续风险点。</p>
+                      <p>用户诉求、处理结果、风险点。</p>
                     </div>
                     <button id="summary-btn" class="button button-secondary">生成</button>
                   </div>
                   <div id="summary-output" class="output-box">
-                    会话总结会显示在这里。
+                    暂无会话总结。
                   </div>
                 </article>
 
@@ -316,14 +310,14 @@
                   <div class="ops-head">
                     <div>
                       <h3>追问建议</h3>
-                      <p>给出下一步可继续确认的问题，方便连续服务。</p>
+                      <p>下一步确认点。</p>
                     </div>
                     <button id="next-question-btn" class="button button-secondary">
                       生成
                     </button>
                   </div>
                   <div id="next-question-output" class="output-box">
-                    追问建议会显示在这里。
+                    暂无追问建议。
                   </div>
                 </article>
 
@@ -331,7 +325,7 @@
                   <div class="ops-head">
                     <div>
                       <h3>回复质检</h3>
-                      <p>检查最新回复是否存在夸大承诺、绝对化表述或服务态度风险。</p>
+                      <p>最新回复风险记录。</p>
                     </div>
                     <button id="quality-btn" class="button button-secondary">检查</button>
                   </div>
@@ -344,7 +338,7 @@
                     />
                   </label>
                   <div id="quality-output" class="output-box">
-                    质检结果会显示在这里。
+                    暂无质检记录。
                   </div>
                 </article>
 
@@ -352,7 +346,7 @@
                   <div class="ops-head">
                     <div>
                       <h3>FAQ 沉淀</h3>
-                      <p>将高质量问答保存为可复用知识。</p>
+                      <p>可复用问答沉淀。</p>
                     </div>
                     <button id="save-faq-btn" class="button button-primary">保存</button>
                   </div>
@@ -364,7 +358,7 @@
                     </div>
                   </label>
                   <div id="faq-output" class="output-box">
-                    FAQ 保存结果会显示在这里。
+                    暂无 FAQ 沉淀。
                   </div>
                 </article>
               </div>
@@ -422,6 +416,6 @@
       </article>
     </template>
 
-    <script src="/static/app.js?v=20260709-workbench-4" defer></script>
+    <script src="/static/app.js?v=20260709-workbench-6" defer></script>
   </body>
 </html>
