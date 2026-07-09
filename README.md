@@ -1,214 +1,279 @@
-# 智能客服助手
-## 应用介绍
-这是一款以车载零配件网店客服场景为例设计的智能导购机器人。依赖大模型的 Function Calling 能力与商品知识库、电商现有工具等，为网店运营小二提供助力。此外，开发者还可以参考本示例，逐模块对接真实电商系统接口，实现大模型升级优化，客服算法测试等。
-### 效果预览
-![alt text](assets/image-1.png)
-1. 模拟商店运营：选择货架上的商品。
-2. 配置智能客服能力：支持产品介绍、物流咨询、退款退货、导购推荐、离线质检、订单查询等能力。
-3. 体验测试：支持切换全托管模式和人工辅助模式，测试智能客服与消费者的对话流畅度。并体验对话一键总结，实时质检等进阶能力。
-  - 全托管模式：智能客户直接回复用户问题。
-  - 人工辅助模式：智能客服的回复将展示在输入框中，可根据需要人工二次修改。
-### 直接体验
-<a target="_blank" href="https://console.volcengine.com/ark/region:ark+cn-beijing/assistant/detail?id=bot-20241211162948-5l2kk-procode-preset">控制台体验</a>
+# Customer Service Agent
 
-### 流程架构
-![alt text](assets/image-9.png)
-## 关联模型及云产品
-### 模型
-| 相关服务               | 描述                                                                                                   | 计费说明                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| doubao-seed-1-6-250615 | 通过Function Calling能力选择所需工具，根据消费者的问题生成商家回复，并可进行一键总结，回答质检等功能。 | <a target="_blank" href="https://www.volcengine.com/docs/82379/1099320">多种计费方式</a> |
+面向电商售前、订单、物流和售后的智能客服工作台。项目从车载用品店铺客服场景出发，把大模型回复、知识库检索、订单/物流/退款工具调用、会话沉淀、质检和前端坐席台整合到一个可本地运行、可继续接真实业务系统的应用里。
 
-### 云服务
-| 相关服务                                                                           | 描述                                                                               | 计费说明                                                                                  |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| <a target="_blank" href="https://www.volcengine.com/docs/82379/1261883">知识库</a> | 提供知识管理的能力，支持对文档执行解析、切片、向量化、构建索引等处理进行知识检索。 | <a target="_blank" href="https://www.volcengine.com/docs/82379/1263336">多种计费方式</a>  |
-| <a target="_blank" href="https://www.volcengine.com/product/TOS">对象存储</a>      | 基于先进分布式技术，帮助用户存储并管理海量非结构化数据。                           | <a target="_blank" href="https://www.volcengine.com/docs/6349/78455">按量计费+资源包</a>  |
-| <a target="_blank" href="https://www.volcengine.com/product/vefaas">函数服务</a>   | Serverless全托管计算平台，支持快速创建部署函数。                                   | <a target="_blank" href="https://www.volcengine.com/docs/6662/107454">按量计费+资源包</a> |
-| <a target="_blank" href="https://www.volcengine.com/product/tls">日志服务</a>      | 提供针对日志类数据的一站式服务。                                                   | <a target="_blank" href="https://www.volcengine.com/docs/6470/1215813">按量计费</a>       |
-| <a target="_blank" href="https://www.volcengine.com/product/apig">API网关</a>      | 基于云原生、高扩展、高可用的云上网关托管服务。                                     | <a target="_blank" href="https://www.volcengine.com/docs/6569/185249">按量计费</a>        |
+这个仓库已经不只是原始 Demo：当前版本支持本地 Mock 演示，也支持替换为 DeepSeek、智谱或火山引擎模型；知识库可以从火山引擎切换到 Dify；订单、物流、退款能力可以先用本地模拟数据跑通，再通过 HTTP 适配器接入真实业务接口。
 
-## 环境准备
+## 项目定位
 
-- Python 版本要求大于等于 3.10，小于 3.12
-- <a target="_blank" href="https://console.volcengine.com/iam/keymanage/">获取火山引擎 AK SK</a> | <a target="_blank" href="https://www.volcengine.com/docs/6291/65568">参考文档</a>
-  注意：如果使用的是 IAM 子用户的 AK SK，请联系管理员授予该用户 ArkFullAccess + TOSFullAccess 预设策略，或者 AdministratorAccess 预设策略。
-- 在<a target="_blank" href="https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&OpenTokenDrawer=false">开通管理页</a>开通 doubao-seed-1-6-250615 模型。
-- <a target="_blank" href="https://console.volcengine.com/tos/bucket?">创建 TOS Bucket</a> 用于存储FAQ数据 | <a target="_blank" href="https://www.volcengine.com/docs/6349/74830">参考文档</a>
+这个项目适合用来展示一个完整的“AI 客服 + 业务工具 + 知识库 + 工作台”的落地流程：
 
-## 快速入门
-本文为您介绍如何在本地部署智能导购应用，并进行调用。
-1. 创建商品信息检索用知识库，并记录知识库名称备用。
-   1. 创建知识库，按下图所示配置标签 `产品名: List<String>` `account_id: String`，其他配置保持默认。
-      ![alt text](assets/image-10.png)
-   2. 上传文档，上传`backend/docs/`下的产品介绍示例文档，并给每个产品文档标上和`backend/data/product.py`中一致的产品名标签。
-      ![alt text](assets/image-3.png)
-   3. （可选）添加自定义商品：
-      1. 更新 backend/data/product.py 中的商品源信息
-      2. 按上述步骤上传商品文档至知识库
-   4. 记录知识库名称备用。
-![alt text](assets/image-4.png)
-2. 创建 FAQ 检索用知识库，并记录 FAQ 知识库名称备用。
-   1. 创建知识库
-      1. 数据类型选择 结构化数据
-      2. 按下图所示配置标签 `产品名: List<String>` `account_id: String`
-        ![alt text](assets/image-10.png)
-      3. 其他配置保持默认。
-   2. 上传backend/docs/faq_example.faq.xlsx示例文档
-        ![alt text](assets/image-8.png)
-   3. 记录 FAQ 知识库名称备用。
-        ![alt text](assets/image-7.png)
-3. 下载代码库
+- 给客服坐席提供一个更像真实业务系统的接待页面，而不是简单聊天框。
+- 通过大模型生成客服回复，并在需要时调用订单查询、物流查询、退款处理等工具。
+- 通过知识库回答商品介绍、售后规则、常见问题等稳定信息。
+- 通过会话记录、质检、总结和处理结果面板，帮助运营复盘客服质量。
+- 保留标准 API，方便后续接入 CRM、小程序、企业微信或自建客服系统。
 
-```shell
-git clone https://github.com/volcengine/ai-app-lab.git
-cd customer-service-agent/backend
+## 主要功能
+
+- **客服工作台前端**：包含接待设置、场景切换、服务权限、商品货架、历史接待、聊天记录、处理结果、执行记录和复盘沉淀。
+- **智能客服回复**：支持流式输出和非流式输出，可根据用户问题自动组织客服话术。
+- **知识库检索**：商品知识和 FAQ 可走火山引擎知识库，也可切换为 Dify Dataset。
+- **工具调用**：支持订单查询、物流查询、退款退货等业务动作，DeepSeek/智谱等 OpenAI 兼容模型也可以使用工具调用。
+- **会话持久化**：使用 SQLite 保存会话、账号、用户问题、助手回复和元数据。
+- **质检能力**：内置规则质检，同时保留大模型质检接口，用于识别不合规承诺、极限词等风险。
+- **对话总结**：将客服与用户的对话整理成简短摘要，方便交接和复盘。
+- **FAQ 沉淀**：可将高质量问答保存到本地 Mock、火山引擎 FAQ 知识库或 Dify FAQ 数据集。
+- **运行观测**：输出 JSON Lines 日志，记录 HTTP 请求、大模型调用、知识库检索、工具执行和业务接口调用耗时。
+- **API 鉴权**：标准 `/api/*` 接口支持可选 `X-API-Key` 或 `Authorization: Bearer` 鉴权。
+
+## 技术栈
+
+- **后端框架**：Python、FastAPI、Arkitect BotServer
+- **模型接入**：火山引擎 Ark、DeepSeek、智谱、其他 OpenAI-compatible Chat Completions API
+- **知识库接入**：火山引擎知识库、Dify Dataset API
+- **业务工具层**：订单查询、物流查询、退款处理，支持 Mock 和 HTTP 业务系统适配
+- **数据存储**：SQLite 会话库、本地 Mock FAQ 文件、结构化日志文件
+- **前端实现**：原生 HTML/CSS/JavaScript，无复杂前端构建链路，便于演示和二次改造
+- **测试**：Python unittest，覆盖模型适配、业务服务、会话存储、RAG、质检规则和 API 逻辑
+
+## 项目结构
+
+```text
+backend/
+├── main.py                    # 服务入口，注册页面、标准 API 和兼容 API
+├── config.py                  # 环境变量配置
+├── llm_provider.py            # DeepSeek/智谱/OpenAI-compatible 模型适配
+├── business_services.py       # 订单、物流、退款的 Mock/HTTP 业务数据层
+├── conversation_store.py      # SQLite 会话持久化
+├── agent_tools.py             # 工具调用定义和结果转换
+├── mock_agent.py              # 本地 Mock 回复能力
+├── quality_rules.py           # 本地质检规则
+├── observability.py           # JSON 结构化日志
+├── data/
+│   ├── product.py             # 商品基础数据
+│   ├── orders.py              # Mock 订单数据
+│   ├── tracking.py            # Mock 物流数据
+│   └── rag.py                 # 火山引擎/Dify 知识库检索与 FAQ 保存
+├── tools/
+│   ├── order_check.py         # 订单查询工具
+│   ├── pack_track.py          # 物流查询工具
+│   └── order_refund.py        # 退款处理工具
+├── webui/
+│   ├── index.html             # 客服工作台页面
+│   ├── styles.css             # 工作台视觉样式
+│   └── app.js                 # 前端交互、接口调用和状态管理
+├── docs/
+│   ├── dify_product_service_knowledge.md # Dify 商品知识库导入文件
+│   └── dify_faq_knowledge.md             # Dify FAQ 知识库导入文件
+├── tests/                     # 单元测试
+├── API.md                     # API 和环境变量说明
+└── start_demo.ps1             # Windows 本地启动脚本
 ```
 
-4. 设置环境变量，可参考【环境准备】章节获取以下内容
+## 快速启动
 
-```shell
-# 填写火山引擎 AK
-export VOLC_ACCESSKEY="your_access_key" 
-# 填写火山引擎 SK
-export VOLC_SECRETKEY="your_secret_key" 
-# 填写商品信息检索用知识库名称
-export COLLECTION_NAME="your_collection_name" 
-# 填写FAQ检索用知识库名称
-export FAQ_COLLECTION_NAME="your_faq_collection_name" 
-# 填写使用的大语言模型 Model ID，建议使用doubao-seed-1-6-250615
-export LLM_ENDPOINT_ID="doubao-seed-1-6-250615"
-# 填写存储FAQ使用的 TOS Bucket 名称
-export BUCKET_NAME="your_bucket_name"
-# True: 使用环境变量中的 VOLC_ACCESSKEY 或 ARK_API_KEY 为后续LLM访问鉴权
-# False: 使用client请求中的Authorization header为后续LLM访问鉴权
-export USE_SERVER_AUTH="True" 
-# 由于 Model ID 不支持AKSK鉴权，如USE_SERVER_AUTH为True，且LLM_ENDPOINT_ID使用Model ID 需设置环境变量中的ARK_API_KEY
-export ARK_API_KEY="your_api_key"
-```
+### 1. 安装依赖
 
-5. 安装依赖
-
-```shell
+```powershell
+cd D:\projects\customer-service-agent\backend
 python -m venv .venv
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 pip install uv
 uv sync
 ```
 
-6. 启动服务
+也可以使用已有虚拟环境，直接安装 `requirements.txt` 或通过 `uv sync` 同步依赖。
 
-```shell
-uv run main.py
-```
+### 2. 配置本地环境
 
-7. 后端服务启动成功后，可在本地通过 curl 方式对服务进行调用，体验以下5个场景的能力。
+复制示例配置：
 
-- 智能问答
-```shell
-curl --location 'http://localhost:8080/api/v3/bots/chat/completions' \
---header 'Content-Type: application/json' \
---data '{
-    "stream": false,
-    "model": "my-bot",
-    "messages": [
-        {
-            "role": "user",
-            "content": "我都买过什么"
-        }
-    ]
-}'
-```
-- 保存FAQ
-```shell
-curl --location 'http://localhost:8080/api/v3/bots/chat/completions/save_faq' \
---header 'Content-Type: application/json' \
---data '{
-    "question": "安装方法",
-    "answer": "亲爱哒,使用方法可以参考宝贝主页视频和详情页介绍哦~",
-    "score": 5,
-    "account_id": "100000"
-}'
-```
-- 质检风险词
-```shell
-curl --location 'http://localhost:8080/api/v3/bots/chat/completions/quality_inspection' \
---header 'Content-Type: application/json' \
---data '{
-    "stream": false,
-    "model": "my-bot",
-    "messages": [
-        {
-            "role": "user",
-            "content": "user:这个可爱风腰靠垫价格还可以更低吗？\n assistant: 亲,这款商品绝对是全网最 低价啦!"
-        }
-    ]
-}'
-```
-- 对话总结
-```shell
-curl --location 'http://localhost:8080/api/v3/bots/chat/completions/summary' \
---header 'Content-Type: application/json' \
---data '{
-    "stream": false,
-    "model": "my-bot",
-    "messages": [
-        {
-            "role": "user",
-            "content": "user:这个可爱风腰靠垫价格还可以更低吗？\n assistant: 亲,这款商品绝对是全网最 低价啦!"
-        }
-    ]
-}'
-```
-- 追问提示
-```shell
-curl --location 'http://localhost:8080/api/v3/bots/chat/completions/next_question' \
---header 'Content-Type: application/json' \
---data '{
-    "stream": false,
-    "model": "my-bot",
-    "messages": [
-        {
-            "role": "user",
-            "content": "user:这个可爱风腰靠垫价格还可以更低吗？\n assistant: 亲,这款商品绝对是全网最 低价啦!"
-        }
-    ]
-}'
-```
-## 目录结构
-
-```
-├── README.md
-├── config.py              # 配置文件
-├── main.py               
-├── quality_inspection.py # 质量检查模块
-├── summary.py           # 对话总结模块
-├── utils.py
-├── docs/                # 知识库初始化时使用的文档       
-├── data/                # 数据目录
-    ├── cache.py        # mock 存储
-    ├── orders.py       # 每个账号mock生成三个订单
-    ├── product.py      # 商品目录和信息，添加商品时需修改此文件
-    ├── rag.py          # 检索商品详情和FAQ
-    └── tracking.py     # mock物流追踪
-├── tests/               # 测试用例
-└── tools/               # 智能问答模块实现，tools及其prompt
+```powershell
+Copy-Item .env.local.example .env.local
 ```
 
-## 技术实现
-![alt text](assets/image.png)
-- `/completions` 客服问答
-  - 通过模型 function call 能力实现工具调用
-    - 内置三个模拟工具：订单查询、物流咨询、退货退款
-    - 会进行内部多轮模型调用，直到模型没有使用工具的意愿
-- `/summary` 总结客服与用户的对话内容
-  - 单次 LLM 调用实现
-- `/quality_inspection`根据质检词和内置 `system prompt` 对客服回答进行质检
-  - 单次 LLM调用实现
-- `/save_faq`
-  - 下载`BUCKET_NAME`桶中的FAQ文件，更新并重新上传
-  -  `FAQ_COLLECTION_NAME`知识库加载`BUCKET_NAME`桶中新的 FAQ 数据
-- `/next_question` 辅助客户追问
-  - 单次 LLM 调用实现
+本地演示推荐先使用 Mock 模式：
 
- 
+```env
+MOCK_MODE=True
+LANGUAGE=zh
+BUSINESS_DATA_PROVIDER=mock
+API_KEYS=
+```
+
+### 3. 启动服务
+
+```powershell
+.\start_demo.ps1
+```
+
+默认访问：
+
+```text
+http://127.0.0.1:8080/demo
+```
+
+如果 8080 被占用，可以设置端口：
+
+```powershell
+$env:_FAAS_RUNTIME_PORT='8081'
+.\.venv\Scripts\python.exe main.py
+```
+
+## 模型切换
+
+### 本地 Mock
+
+```env
+MOCK_MODE=True
+```
+
+适合无密钥、本地演示、前端联调和测试。
+
+### DeepSeek
+
+```env
+MOCK_MODE=False
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your_deepseek_api_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseekv4pro
+```
+
+如果你的 DeepSeek V4 Pro 实际模型 ID 不同，只需要改 `DEEPSEEK_MODEL`。
+
+### 智谱
+
+```env
+MOCK_MODE=False
+LLM_PROVIDER=zhipu
+ZHIPU_API_KEY=your_zhipu_api_key
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
+ZHIPU_MODEL=glm-5.2
+```
+
+### 火山引擎
+
+```env
+MOCK_MODE=False
+LLM_PROVIDER=volcengine
+VOLC_ACCESSKEY=your_ak
+VOLC_SECRETKEY=your_sk
+LLM_ENDPOINT_ID=doubao-seed-1-6-250615
+ARK_API_KEY=your_ark_api_key
+USE_SERVER_AUTH=True
+```
+
+## Dify 知识库接入
+
+项目已经准备了两份可导入 Dify 的知识库文件：
+
+- `docs/dify_product_service_knowledge.md`：商品介绍、适配场景、卖点和售后说明。
+- `docs/dify_faq_knowledge.md`：常见问题、客服话术、售后规则和运营沉淀。
+
+推荐在 Dify 中创建两个 Dataset：
+
+- 商品知识库：用于商品介绍、规格、安装、适配和使用建议。
+- FAQ 知识库：用于售后政策、物流、退款、常见问题和可复用客服回答。
+
+配置方式：
+
+```env
+MOCK_MODE=False
+KNOWLEDGE_PROVIDER=dify
+DIFY_API_KEY=your_dify_api_key
+DIFY_BASE_URL=https://api.dify.ai/v1
+DIFY_DATASET_ID=your_product_dataset_id
+DIFY_FAQ_DATASET_ID=your_faq_dataset_id
+DIFY_TOP_K=5
+DIFY_SCORE_THRESHOLD_ENABLED=False
+DIFY_SCORE_THRESHOLD=0
+```
+
+稳定知识放在 Dify；实时订单、物流、退款进度不要放知识库，应通过 `BUSINESS_DATA_PROVIDER=http` 接真实业务接口。
+
+## 业务系统接入
+
+本地默认使用 Mock 数据：
+
+```env
+BUSINESS_DATA_PROVIDER=mock
+```
+
+接真实系统时切换为 HTTP：
+
+```env
+BUSINESS_DATA_PROVIDER=http
+BUSINESS_API_BASE_URL=https://your-business-api.example.com
+BUSINESS_API_KEY=your_business_api_key
+BUSINESS_API_TIMEOUT=8
+```
+
+后端期望业务系统提供：
+
+```http
+GET /orders?account_id=100000
+GET /orders/{order_id}?account_id=100000
+GET /orders?account_id=100000&product=product_name
+GET /tracking?account_id=100000&order_id=order_id&tracking_number=tracking_number
+POST /refunds
+```
+
+## 常用 API
+
+```http
+GET /health
+GET /ready
+GET /api/products
+POST /api/chat
+POST /api/faqs
+POST /api/quality-check
+POST /api/summary
+GET /api/conversations
+GET /api/conversations/{conversation_id}
+```
+
+兼容原始 Bot 接口：
+
+```http
+POST /api/v3/bots/chat/completions
+POST /api/v3/bots/chat/completions/save_faq
+POST /api/v3/bots/chat/completions/summary
+POST /api/v3/bots/chat/completions/quality_inspection
+POST /api/v3/bots/chat/completions/next_question
+```
+
+更完整的接口说明见 `API.md`。
+
+## 测试与校验
+
+```powershell
+node --check .\webui\app.js
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m compileall -q main.py config.py agent_tools.py business_services.py conversation_store.py llm_provider.py mock_agent.py observability.py quality_rules.py data tools
+```
+
+启动后检查服务状态：
+
+```powershell
+Invoke-RestMethod -Method GET http://127.0.0.1:8080/ready
+```
+
+## 项目亮点
+
+- 从“聊天 Demo”升级为带业务上下文的客服坐席工作台。
+- 模型层、知识库层、业务数据层都做了可替换设计，后续迁移成本低。
+- DeepSeek/智谱路径支持 OpenAI-compatible tool calling，可以继续保留订单、物流、退款等工具能力。
+- Dify 知识库接入后，运营可以直接维护商品知识和 FAQ，不需要改代码。
+- 使用 SQLite 保存会话，便于展示历史接待、质检结果和复盘沉淀。
+- 前端不依赖复杂工程化，适合快速部署、演示和二次迭代。
+
+## 后续优化方向
+
+- 接入真实订单、物流、售后系统，替换本地 Mock 数据。
+- 在 Dify 中完善商品知识库和 FAQ 知识库，并建立运营更新流程。
+- 增加客服接管、满意度评价、工单标签、用户画像和风险升级规则。
+- 增加更细的权限控制、租户隔离和接口限流，适配生产环境。
+- 将前端进一步拆成组件化工程，支持更复杂的客服运营后台。
+

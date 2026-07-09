@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=20260707-workbench-3" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260709-workbench-4" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%231f241f'/%3E%3Crect x='12' y='14' width='40' height='36' rx='6' fill='%23f7f5ef'/%3E%3Cpath d='M20 25h24M20 33h18M20 41h24' stroke='%231d6f50' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
@@ -126,6 +126,25 @@
             </div>
           </div>
         </header>
+
+        <section class="workbench-strip" aria-label="当前接待摘要">
+          <div class="strip-item">
+            <span>当前账号</span>
+            <strong id="desk-account">100000</strong>
+          </div>
+          <div class="strip-item">
+            <span>服务场景</span>
+            <strong id="desk-scenario">售前导购</strong>
+          </div>
+          <div class="strip-item">
+            <span>启用能力</span>
+            <strong id="desk-capabilities">5 项</strong>
+          </div>
+          <div class="strip-item">
+            <span>最近动作</span>
+            <strong id="desk-latest-action">等待接待</strong>
+          </div>
+        </section>
 
         <section class="content-grid">
           <section class="conversation-panel">
@@ -403,6 +422,6 @@
       </article>
     </template>
 
-    <script src="/static/app.js?v=20260707-workbench-3" defer></script>
+    <script src="/static/app.js?v=20260709-workbench-4" defer></script>
   </body>
 </html>

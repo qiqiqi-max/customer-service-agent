@@ -111,6 +111,10 @@ const refs = {
   productPill: document.getElementById("product-pill"),
   selectedProductCount: document.getElementById("selected-product-count"),
   modeLabel: document.getElementById("mode-label"),
+  deskAccount: document.getElementById("desk-account"),
+  deskScenario: document.getElementById("desk-scenario"),
+  deskCapabilities: document.getElementById("desk-capabilities"),
+  deskLatestAction: document.getElementById("desk-latest-action"),
   resultPill: document.getElementById("result-pill"),
   resultCards: document.getElementById("result-cards"),
   contextAccount: document.getElementById("context-account"),
@@ -182,6 +186,10 @@ function bindEvents() {
   refs.qualityBtn.addEventListener("click", handleQualityInspection);
   refs.saveFaqBtn.addEventListener("click", handleSaveFaq);
   refs.streamMode.addEventListener("change", syncOverviewStats);
+  refs.accountId.addEventListener("input", () => {
+    renderCustomerContext();
+    syncOverviewStats();
+  });
   refs.faqScore.addEventListener("input", () => {
     refs.faqScoreValue.textContent = refs.faqScore.value;
   });
@@ -836,6 +844,7 @@ function setActionState(disabled) {
 function syncOverviewStats() {
   const selectedFunctionCount = state.selectedFunctions.size;
   const selectedProductCount = state.selectedProducts.size;
+  const scenario = getActiveScenario();
 
   refs.activeCapabilityCount.textContent = String(selectedFunctionCount);
   refs.capabilityPill.textContent = `${selectedFunctionCount} 项已启用`;
@@ -844,6 +853,23 @@ function syncOverviewStats() {
     ? `${selectedProductCount}/${state.products.length} 项已选`
     : "加载中";
   refs.modeLabel.textContent = refs.streamMode.checked ? "逐字" : "完整";
+  if (refs.deskAccount) {
+    refs.deskAccount.textContent = refs.accountId.value.trim() || "100000";
+  }
+  if (refs.deskScenario) {
+    refs.deskScenario.textContent = scenario.label;
+  }
+  if (refs.deskCapabilities) {
+    refs.deskCapabilities.textContent = `${selectedFunctionCount} 项`;
+  }
+  if (refs.deskLatestAction) {
+    const latestUserMessage = [...state.messages]
+      .reverse()
+      .find((message) => message.role === "user")?.content;
+    refs.deskLatestAction.textContent =
+      state.executionRecords[0]?.actionName ||
+      (latestUserMessage ? inferIntentLabel(latestUserMessage) : "等待接待");
+  }
 }
 
 function getActiveScenario() {
@@ -876,6 +902,9 @@ function renderExecutionTimeline() {
   refs.executionPill.textContent = `${state.executionRecords.length} 条动作`;
   refs.latestActionName.textContent = state.executionRecords[0].actionName;
   refs.toolCallCount.textContent = String(state.executionRecords.length);
+  if (refs.deskLatestAction) {
+    refs.deskLatestAction.textContent = state.executionRecords[0].actionName;
+  }
 
   state.executionRecords.forEach((record) => {
     const fragment = refs.executionTemplate.content.cloneNode(true);
