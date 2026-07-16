@@ -5,3 +5,19 @@ __pycache__/
 data/*.sqlite3
 logs/
 output/
+
+# Backup and scratch files
+*.backup
+*.bak
+*-v2.*
+*.orig
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
