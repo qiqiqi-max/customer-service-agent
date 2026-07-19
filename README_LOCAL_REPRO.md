@@ -1,6 +1,6 @@
-# Shop Assist Local Repro Guide (Windows / PowerShell)
+﻿# Customer Service Agent - Local Setup Guide (Windows / PowerShell)
 
-This guide records the exact local setup and verification flow that has been validated in this environment.
+This guide records the local setup and verification flow for running the backend on Windows with PowerShell.
 
 ## 1) Prerequisites
 
@@ -17,7 +17,7 @@ This guide records the exact local setup and verification flow that has been val
 
 Run in:
 
-`D:\projects\customer-service-agent\backend`
+`<project-root>`
 
 ```powershell
 python -m venv .venv
@@ -291,3 +291,4 @@ For response text that is already garbled:
 $s = ($resp.Content | ConvertFrom-Json).choices[0].message.content
 [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding(28591).GetBytes($s))
 ```
+
