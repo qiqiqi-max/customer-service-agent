@@ -139,7 +139,7 @@ flowchart TB
 
 ```bash
 git clone https://github.com/qiqiqi-max/customer-service-agent.git
-cd customer-service-agent/backend
+cd customer-service-agent
 ```
 
 ### 2. 安装依赖
@@ -204,6 +204,16 @@ BUSINESS_API_KEY=xxx
 ```bash
 curl http://127.0.0.1:8080/ready
 ```
+
+### Docker 启动
+
+项目也提供容器化启动方式，适合在演示环境或服务器上快速拉起：
+
+```bash
+docker compose up --build
+```
+
+启动后访问：`http://127.0.0.1:8080/demo`
 
 ## 生产部署建议
 
@@ -363,7 +373,7 @@ Mock 模式使用本地数据，适合开发调试；真实模式调用大模型
 - [ ] 支持多客服协同
 - [ ] 增加人工接管能力
 - [ ] 支持富文本消息
-- [ ] Docker 容器化部署
+- [x] Docker 容器化部署
 - [ ] Kubernetes 编排示例
 - [ ] 性能监控和告警
 
