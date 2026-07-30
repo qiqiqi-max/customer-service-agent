@@ -1,129 +1,366 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>客服工作台</title>
-    <meta name="description" content="电商客服智能接待工作台" />
-    <link rel="stylesheet" href="/static/styles.css?v=20260721-optimized" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232563eb'/%3E%3Cpath d='M20 28h24M20 36h18' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <title>客服工单台</title>
+    <meta
+      name="description"
+      content="面向电商售前、订单、物流与售后的客服接待工作站。"
+    />
+    <link rel="stylesheet" href="/static/styles.css?v=20260709-workbench-6" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%231f241f'/%3E%3Crect x='12' y='14' width='40' height='36' rx='6' fill='%23f7f5ef'/%3E%3Cpath d='M20 25h24M20 33h18M20 41h24' stroke='%231d6f50' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-badge">客</div>
-          <div>
-            <p class="brand-name">客服工作台</p>
-            <p class="brand-subtitle">智能接待系统</p>
+        <div class="sidebar-inner">
+          <div class="brand">
+            <div class="brand-badge">客</div>
+            <div>
+              <p class="brand-name">客服工单台</p>
+              <p class="brand-subtitle">电商服务工作站</p>
+            </div>
           </div>
+
+          <section class="sidebar-section workspace-card">
+            <div class="section-heading">
+              <h2>接待设置</h2>
+              <span class="status-dot">
+                <span class="status-dot-core"></span>
+                <strong id="health-status">检查中</strong>
+              </span>
+            </div>
+
+            <label class="field">
+              <span>客户账号</span>
+              <input id="account-id" type="text" value="100000" />
+            </label>
+
+            <label class="switch-row">
+              <div>
+                <span>逐字显示</span>
+                <small>开启后实时返回。</small>
+              </div>
+              <input id="stream-mode" type="checkbox" checked />
+            </label>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-heading">
+              <h2>处理场景</h2>
+              <span class="section-meta">快速套用接待范围</span>
+            </div>
+            <div id="scenario-chips" class="scenario-list"></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-heading">
+              <h2>服务权限</h2>
+              <span class="section-meta" id="capability-pill">5 项已启用</span>
+            </div>
+            <div id="function-grid" class="capability-list"></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-heading">
+              <h2>商品货架</h2>
+              <span class="section-meta" id="product-pill">加载中</span>
+            </div>
+            <div id="product-grid" class="product-list"></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-heading">
+              <h2>最近接待</h2>
+              <span class="section-meta" id="conversation-pill">加载中</span>
+            </div>
+            <div class="conversation-actions">
+              <button type="button" id="new-conversation" class="mini-button">
+                新接待
+              </button>
+              <button type="button" id="refresh-conversations" class="mini-button">
+                刷新
+              </button>
+            </div>
+            <div id="conversation-list" class="conversation-list" aria-live="polite"></div>
+          </section>
         </div>
-
-        <section class="sidebar-section">
-          <div class="section-heading">
-            <h2>接待设置</h2>
-          </div>
-
-          <label class="field">
-            <span>客户账号</span>
-            <input id="account-id" type="text" value="100000" />
-          </label>
-
-          <label class="field">
-            <span>回复模式</span>
-            <select id="stream-mode" style="width: 100%; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; background: rgba(255, 255, 255, 0.08); color: white; font-size: 13px;">
-              <option value="true">逐字显示</option>
-              <option value="false">完整返回</option>
-            </select>
-          </label>
-        </section>
-
-        <section class="sidebar-section">
-          <div class="section-heading">
-            <h2>服务场景</h2>
-          </div>
-          <div id="scenario-chips" class="scenario-list"></div>
-        </section>
-
-        <section class="sidebar-section">
-          <div class="section-heading">
-            <h2>服务能力</h2>
-          </div>
-          <div id="function-grid" class="capability-list"></div>
-        </section>
-
-        <section class="sidebar-section">
-          <div class="section-heading">
-            <h2>历史会话</h2>
-          </div>
-          <div class="conversation-actions">
-            <button type="button" id="new-conversation" class="mini-button">新会话</button>
-            <button type="button" id="refresh-conversations" class="mini-button">刷新</button>
-          </div>
-          <div id="conversation-list" class="conversation-list"></div>
-        </section>
       </aside>
 
       <main class="main-panel">
         <header class="topbar">
-          <div>
-            <h1>客服工作台</h1>
-            <p class="topbar-subtitle">车载用品店 · Mock 演示模式</p>
+          <div class="topbar-copy">
+            <span class="eyebrow">在线接待</span>
+            <h1>客服工单台</h1>
+            <p class="topbar-subtitle">
+              车载用品店 · 白班接待 · Mock 数据演示
+            </p>
+          </div>
+
+          <div class="topbar-stats" aria-label="工作台概览">
+            <div class="stat-card">
+              <span>消息</span>
+              <strong id="message-count">0</strong>
+            </div>
+            <div class="stat-card">
+              <span>权限</span>
+              <strong id="active-capability-count">0</strong>
+            </div>
+            <div class="stat-card">
+              <span>商品</span>
+              <strong id="selected-product-count">0</strong>
+            </div>
+            <div class="stat-card">
+              <span>回复</span>
+              <strong id="mode-label">逐字</strong>
+            </div>
           </div>
         </header>
 
+        <section class="workbench-strip" aria-label="当前接待摘要">
+          <div class="strip-item">
+            <span>客户账号</span>
+            <strong id="desk-account">100000</strong>
+          </div>
+          <div class="strip-item">
+            <span>服务场景</span>
+            <strong id="desk-scenario">售前导购</strong>
+          </div>
+          <div class="strip-item">
+            <span>启用能力</span>
+            <strong id="desk-capabilities">5 项</strong>
+          </div>
+          <div class="strip-item">
+            <span>最近动作</span>
+            <strong id="desk-latest-action">等待接待</strong>
+          </div>
+        </section>
+
         <section class="content-grid">
           <section class="conversation-panel">
-            <div class="conversation-surface">
+            <section class="intro-panel">
+              <div class="intro-copy">
+                <span class="panel-kicker">快捷填充</span>
+                <h2>待发送话术</h2>
+                <p>售前 / 订单 / 物流 / 售后</p>
+              </div>
+              <div id="quick-prompts" class="prompt-grid"></div>
+            </section>
+
+            <section class="conversation-surface">
               <div class="conversation-header">
-                <h2>对话记录</h2>
-                <button type="button" id="clear-chat" class="button button-secondary">清空</button>
+                <div>
+                  <span class="panel-kicker">当前会话</span>
+                  <h2>接待记录</h2>
+                </div>
+                <button type="button" id="clear-chat" class="button button-secondary">
+                  清空
+                </button>
               </div>
 
-              <div id="chat-thread" class="chat-thread"></div>
+              <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
 
               <form id="composer-form" class="composer">
-                <label>
-                  <span class="sr-only">输入消息</span>
+                <label class="composer-field">
+                  <span class="sr-only">输入顾客消息</span>
                   <textarea
                     id="composer-input"
                     rows="4"
-                    placeholder="输入客户问题，例如：我之前买的腰靠垫现在送到哪里了？"
+                    placeholder="输入顾客问题，例如：我之前买的腰靠垫现在送到哪里了？如果不合适还能退吗？"
                   ></textarea>
                 </label>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
-                  <p style="margin: 0; color: var(--muted); font-size: 13px;">按 Enter 发送</p>
-                  <button id="composer-submit" type="submit" class="button button-primary">发送</button>
+                <div class="composer-footer">
+                  <p class="composer-tip">
+                    当前接待信息实时更新。
+                  </p>
+                  <button id="composer-submit" type="submit" class="button button-primary">
+                    发送消息
+                  </button>
                 </div>
               </form>
-            </div>
+            </section>
           </section>
 
           <aside class="details-panel">
             <section class="tabs">
-              <div class="tab-list" role="tablist">
-                <button type="button" class="tab-button is-active" data-tab="results" role="tab">结果</button>
-                <button type="button" class="tab-button" data-tab="execution" role="tab">轨迹</button>
-                <button type="button" class="tab-button" data-tab="ops" role="tab">沉淀</button>
+              <div class="tab-list" role="tablist" aria-label="信息面板">
+                <button
+                  type="button"
+                  class="tab-button is-active"
+                  data-tab="results"
+                  role="tab"
+                  aria-selected="true"
+                >
+                  结果
+                </button>
+                <button
+                  type="button"
+                  class="tab-button"
+                  data-tab="execution"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  轨迹
+                </button>
+                <button
+                  type="button"
+                  class="tab-button"
+                  data-tab="ops"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  沉淀
+                </button>
               </div>
 
               <div class="tab-panel is-active" data-panel="results">
+                <div class="panel-header">
+                  <div>
+                    <span class="panel-kicker">客户档案</span>
+                    <h2>本轮概况</h2>
+                  </div>
+                  <span class="panel-meta" id="result-pill">暂无结果</span>
+                </div>
+                <section class="customer-context" id="customer-context">
+                  <div class="context-head">
+                    <div>
+                      <span>当前客户</span>
+                      <strong id="context-account">100000</strong>
+                    </div>
+                    <span id="context-conversation">新会话</span>
+                  </div>
+                  <div class="context-grid">
+                    <div>
+                      <span>最近诉求</span>
+                      <strong id="context-intent">尚未开始</strong>
+                    </div>
+                    <div>
+                      <span>业务状态</span>
+                      <strong id="context-status">等待消息</strong>
+                    </div>
+                    <div>
+                      <span>最近商品</span>
+                      <strong id="context-product">暂无</strong>
+                    </div>
+                    <div>
+                      <span>知识命中</span>
+                      <strong id="context-knowledge">0 条</strong>
+                    </div>
+                  </div>
+                </section>
                 <div id="result-cards" class="result-cards">
-                  <div style="padding: 20px; text-align: center; color: var(--muted);">暂无结果</div>
+                  <div class="empty-state">
+                    暂无工单结果。
+                  </div>
                 </div>
               </div>
 
               <div class="tab-panel" data-panel="execution">
+                <div class="panel-header">
+                  <div>
+                    <span class="panel-kicker">处理过程</span>
+                    <h2>调用记录</h2>
+                  </div>
+                  <span class="panel-meta" id="execution-pill">0 条动作</span>
+                </div>
+                <div class="execution-summary">
+                  <div class="mini-stat">
+                    <span>最近动作</span>
+                    <strong id="latest-action-name">暂无</strong>
+                  </div>
+                  <div class="mini-stat">
+                    <span>记录数量</span>
+                    <strong id="tool-call-count">0</strong>
+                  </div>
+                </div>
                 <div id="execution-timeline" class="execution-timeline">
-                  <div style="padding: 20px; text-align: center; color: var(--muted);">暂无轨迹</div>
+                  <div class="empty-state">
+                    暂无处理轨迹。
+                  </div>
                 </div>
               </div>
 
               <div class="tab-panel" data-panel="ops">
-                <div style="padding: 12px;">
-                  <button id="summary-btn" class="button button-secondary" style="width: 100%; margin-bottom: 12px;">生成会话总结</button>
-                  <div id="summary-output" style="padding: 12px; background: var(--surface-soft); border-radius: 6px; min-height: 60px; color: var(--muted); font-size: 13px;">暂无总结</div>
+                <div class="panel-header">
+                  <div>
+                    <span class="panel-kicker">复盘沉淀</span>
+                    <h2>服务资产</h2>
+                  </div>
+                  <span class="panel-meta">当前会话</span>
                 </div>
+
+                <article class="ops-card">
+                  <div class="ops-head">
+                    <div>
+                      <h3>会话总结</h3>
+                      <p>用户诉求、处理结果、风险点。</p>
+                    </div>
+                    <button id="summary-btn" class="button button-secondary">生成</button>
+                  </div>
+                  <div id="summary-output" class="output-box">
+                    暂无会话总结。
+                  </div>
+                </article>
+
+                <article class="ops-card">
+                  <div class="ops-head">
+                    <div>
+                      <h3>追问建议</h3>
+                      <p>下一步确认点。</p>
+                    </div>
+                    <button id="next-question-btn" class="button button-secondary">
+                      生成
+                    </button>
+                  </div>
+                  <div id="next-question-output" class="output-box">
+                    暂无追问建议。
+                  </div>
+                </article>
+
+                <article class="ops-card">
+                  <div class="ops-head">
+                    <div>
+                      <h3>回复质检</h3>
+                      <p>最新回复风险记录。</p>
+                    </div>
+                    <button id="quality-btn" class="button button-secondary">检查</button>
+                  </div>
+                  <label class="field compact-field">
+                    <span>质检关键词</span>
+                    <input
+                      id="quality-keywords"
+                      type="text"
+                      placeholder="例如：夸大承诺、绝对化用语、服务态度"
+                    />
+                  </label>
+                  <div id="quality-output" class="output-box">
+                    暂无质检记录。
+                  </div>
+                </article>
+
+                <article class="ops-card">
+                  <div class="ops-head">
+                    <div>
+                      <h3>FAQ 沉淀</h3>
+                      <p>可复用问答沉淀。</p>
+                    </div>
+                    <button id="save-faq-btn" class="button button-primary">保存</button>
+                  </div>
+                  <label class="field compact-field">
+                    <span>满意度评分</span>
+                    <div class="score-row">
+                      <input id="faq-score" type="range" min="1" max="5" value="5" />
+                      <strong id="faq-score-value">5</strong>
+                    </div>
+                  </label>
+                  <div id="faq-output" class="output-box">
+                    暂无 FAQ 沉淀。
+                  </div>
+                </article>
               </div>
             </section>
           </aside>
@@ -133,13 +370,52 @@
 
     <template id="message-template">
       <article class="message-card">
-        <div class="message-avatar"></div>
+        <div class="message-avatar" aria-hidden="true"></div>
         <div class="message-content">
+          <div class="message-meta">
+            <span class="message-role"></span>
+          </div>
           <div class="message-body"></div>
         </div>
       </article>
     </template>
 
-    <script src="/static/app.js?v=20260721-optimized" defer></script>
+    <template id="execution-template">
+      <article class="execution-card">
+        <div class="execution-card-header">
+          <div>
+            <span class="execution-action"></span>
+            <h3 class="execution-tool"></h3>
+          </div>
+          <span class="execution-time"></span>
+        </div>
+        <div class="execution-grid">
+          <div class="execution-block">
+            <span>输入</span>
+            <pre class="execution-input"></pre>
+          </div>
+          <div class="execution-block">
+            <span>输出</span>
+            <pre class="execution-output"></pre>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="result-template">
+      <article class="result-card">
+        <div class="result-card-header">
+          <div>
+            <span class="result-type"></span>
+            <h3 class="result-title"></h3>
+          </div>
+          <span class="result-status"></span>
+        </div>
+        <div class="result-fields"></div>
+        <div class="result-rich"></div>
+      </article>
+    </template>
+
+    <script src="/static/app.js?v=20260709-workbench-6" defer></script>
   </body>
 </html>
