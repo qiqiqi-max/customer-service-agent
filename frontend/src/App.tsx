@@ -2,7 +2,6 @@ import {
   Activity,
   Archive,
   Bot,
-  CheckCircle2,
   ClipboardCheck,
   Clock3,
   FileText,
@@ -17,9 +16,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
-  Sparkles,
-  UserRound,
-  Wand2
+  UserRound
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "./api/client";
@@ -35,11 +32,11 @@ import type {
 } from "./types";
 
 const viewItems = [
-  { id: "desk", label: "接待工作台", icon: MessageSquareText },
-  { id: "history", label: "历史会话", icon: History },
-  { id: "products", label: "商品与知识", icon: PackageCheck },
-  { id: "quality", label: "质检沉淀", icon: ClipboardCheck },
-  { id: "settings", label: "接入配置", icon: Settings }
+  { id: "desk", label: "接待", icon: MessageSquareText },
+  { id: "history", label: "会话", icon: History },
+  { id: "products", label: "货架", icon: PackageCheck },
+  { id: "quality", label: "质检", icon: ClipboardCheck },
+  { id: "settings", label: "配置", icon: Settings }
 ] as const;
 
 type ViewId = (typeof viewItems)[number]["id"];
@@ -242,7 +239,7 @@ export function App() {
       const payload = await api.quality(content, qualityKeywords);
       const structured = payload.structured_result;
       const prefix = structured
-        ? `风险等级：${structured.risk_level ?? "unknown"} · 命中 ${structured.hit_count ?? 0} 条\n`
+        ? `风险等级：${structured.risk_level ?? "unknown"}，命中 ${structured.hit_count ?? 0} 条\n`
         : "";
       setQuality(`${prefix}${payload.result || "没有返回质检说明。"}`);
     } catch (error) {
@@ -292,8 +289,8 @@ export function App() {
         <div className="brand">
           <div className="brand-mark">客</div>
           <div>
-            <strong>客服工作台</strong>
-            <span>Customer Service Agent</span>
+            <strong>客服中控台</strong>
+            <span>接待，履约，知识沉淀</span>
           </div>
         </div>
 
@@ -338,9 +335,9 @@ export function App() {
       <main className="main-area">
         <header className="topbar">
           <div>
-            <span className="eyebrow">智能客服接待系统</span>
-            <h1>完整客服工作台</h1>
-            <p>统一处理咨询、订单、物流、售后、质检和知识沉淀。</p>
+            <span className="eyebrow">当前工作区</span>
+            <h1>{viewItems.find((item) => item.id === activeView)?.label ?? "接待"}</h1>
+            <p>把客户消息、业务工具、商品范围和质检沉淀放在一条操作链路里。</p>
           </div>
           <div className="topbar-actions">
             <button className="secondary-button" onClick={startNewConversation} type="button">
@@ -355,10 +352,10 @@ export function App() {
         </header>
 
         <section className="metric-grid">
-          <Metric icon={MessageSquareText} label="消息" value={String(messages.length)} />
-          <Metric icon={ShieldCheck} label="能力" value={`${selectedFunctions.size} 项`} />
-          <Metric icon={PackageCheck} label="商品" value={`${selectedProducts.size} 个`} />
-          <Metric icon={Clock3} label="会话" value={conversationId ? "已保存" : "新会话"} />
+          <Metric icon={MessageSquareText} label="消息数" value={String(messages.length)} />
+          <Metric icon={ShieldCheck} label="启用工具" value={`${selectedFunctions.size} 项`} />
+          <Metric icon={PackageCheck} label="货架范围" value={`${selectedProducts.size} 个`} />
+          <Metric icon={Clock3} label="当前会话" value={conversationId ? "已归档" : "未归档"} />
         </section>
 
         {activeView === "desk" && (
@@ -522,7 +519,7 @@ function DeskView(props: {
             <span className="eyebrow">{props.activeScenario.label}</span>
             <h2>接待对话</h2>
           </div>
-          <span className="status-badge">Mock / API Ready</span>
+          <span className="status-badge">本地模拟，API 已接入</span>
         </div>
 
         <div className="prompt-strip">
@@ -552,7 +549,7 @@ function DeskView(props: {
             value={props.draft}
           />
           <div className="composer-actions">
-            <span>Enter 换行，点击右上角发送</span>
+            <span>输入完成后点击发送，Enter 保留为换行</span>
             <button className="primary-button" disabled={props.isSending} type="submit">
               {props.isSending ? <Loader2 className="spin" size={16} /> : <Send size={16} />}
               发送消息
@@ -664,7 +661,7 @@ function HistoryView(props: {
       <div className="surface">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Conversation Store</span>
+            <span className="eyebrow">会话库</span>
             <h2>历史会话</h2>
           </div>
           <button className="secondary-button" onClick={props.onRefresh} type="button">
@@ -703,7 +700,7 @@ function ProductsView(props: {
       <div className="surface">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Product Shelf</span>
+            <span className="eyebrow">商品范围</span>
             <h2>商品货架</h2>
           </div>
           <span className="count-badge">{props.products.length}</span>
@@ -728,7 +725,7 @@ function ProductsView(props: {
       <div className="surface">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Knowledge Scope</span>
+            <span className="eyebrow">知识范围</span>
             <h2>能力开关</h2>
           </div>
         </div>
@@ -769,7 +766,7 @@ function QualityView(props: {
       <div className="surface ops">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Review</span>
+            <span className="eyebrow">复盘</span>
             <h2>会话总结</h2>
           </div>
           <button className="secondary-button" onClick={props.onSummary} type="button">
@@ -783,7 +780,7 @@ function QualityView(props: {
       <div className="surface ops">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Quality</span>
+            <span className="eyebrow">质检</span>
             <h2>回复质检</h2>
           </div>
           <button className="secondary-button" onClick={props.onQuality} type="button">
@@ -801,7 +798,7 @@ function QualityView(props: {
       <div className="surface ops wide">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Knowledge</span>
+            <span className="eyebrow">知识沉淀</span>
             <h2>FAQ 沉淀</h2>
           </div>
           <button className="primary-button" onClick={props.onSaveFaq} type="button">
@@ -831,7 +828,7 @@ function SettingsView() {
       <div className="surface">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Runtime</span>
+            <span className="eyebrow">运行配置</span>
             <h2>接入配置</h2>
           </div>
           <Settings size={18} />
@@ -852,7 +849,7 @@ function SettingsView() {
           <ConfigCard
             icon={Activity}
             title="业务系统"
-            value="Mock / HTTP Adapter"
+            value="本地模拟 / HTTP 适配器"
             note="订单、物流、退款走 BUSINESS_DATA_PROVIDER。"
           />
           <ConfigCard
