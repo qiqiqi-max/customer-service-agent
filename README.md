@@ -1,16 +1,24 @@
 ﻿# Customer Service Agent
 
-一个生产级的智能客服工作台，为电商客服场景设计。本项目以车载用品店铺为业务示例，演示如何将对话智能、知识检索、业务工具和质检复盘整合到统一的客服接待系统中。
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React%20%2B%20Vite-Workbench-3b82f6?style=flat-square&logo=react&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)
 
-## 特性
+面向电商客服场景的智能客服工作台。项目把大模型对话、Dify 知识库、订单/物流/退款工具、会话持久化、质检复盘和 FAQ 沉淀整合到一套可本地运行、可替换模型、可接入业务系统的 Agent 应用中。
 
-- **生产就绪**：完整的会话持久化、结构化日志、API 鉴权和异常处理
-- **模型无关**：支持 DeepSeek、智谱、火山引擎等主流大模型，统一的工具调用接口
-- **知识可维护**：Dify Dataset 托管商品知识和 FAQ，支持运营团队独立更新
-- **业务可扩展**：订单、物流、退款工具层抽象，可快速接入真实业务系统
-- **前端专业**：去模板化设计，符合 SaaS 工作台视觉规范，移动端优先响应式布局
+它不是单纯的聊天 Demo，而是一套围绕客服日常工作流设计的中控台：客服可以在同一界面完成售前咨询、订单查询、物流解释、售后处理、会话复盘和知识沉淀。
 
-## 预览
+## 项目亮点
+
+- **完整工作台**：React + Vite + TypeScript 构建客服中控台，覆盖接待、会话、货架、质检和配置模块。
+- **模型可替换**：通过统一 Provider 层适配 DeepSeek、智谱、火山引擎和 OpenAI Compatible 服务。
+- **知识库可运营**：支持 Dify Dataset，商品知识和 FAQ 可由运营人员独立维护。
+- **业务工具可扩展**：订单查询、物流跟踪、退款处理抽象为工具层，可从 Mock 数据平滑切换到真实 HTTP 接口。
+- **接待过程可追踪**：会话持久化、工具调用结果、结构化日志和质检结果可用于客服复盘。
+- **部署路径清晰**：支持本地启动、前后端分离开发、后端托管构建产物和 Docker 部署。
+
+## 界面预览
 
 ### 桌面端工作台
 
@@ -19,6 +27,13 @@
 ### 移动端适配
 
 ![客服工作台移动端](docs/images/workbench-mobile.png)
+
+## 适用场景
+
+- 电商店铺的智能客服接待系统
+- 售前导购、订单查询、物流解释、售后退款等客服自动化流程
+- Dify 知识库 + 大模型工具调用的 Agent 项目实践
+- 需要演示 RAG、Function Calling、业务系统接入和会话质检的工程样例
 
 ## 架构设计
 
@@ -84,7 +99,7 @@ flowchart TB
 
 结构化日志记录每次请求的完整链路：大模型调用耗时、知识库检索召回、工具执行结果、业务接口响应。便于定位性能瓶颈和业务问题。
 
-## 核心功能
+## 功能模块
 
 | 功能模块 | 说明 | 适用场景 |
 | --- | --- | --- |
@@ -109,7 +124,7 @@ flowchart TB
 
 - **完整工作台**：React + Vite + TypeScript，位于 `frontend/`
 - **内置演示页**：原生 HTML / CSS / JavaScript，位于 `webui/`
-- **设计**：SaaS 工作台风格，覆盖接待、会话、商品、质检、知识沉淀和接入配置
+- **设计**：客服中控台风格，覆盖接待、会话、货架、质检、知识沉淀和接入配置
 
 ### 大模型
 
@@ -132,7 +147,7 @@ flowchart TB
 ### 环境要求
 
 - Python 3.10 或 3.11
-- Node.js 16+（用于前端语法检查）
+- Node.js 18+（用于完整工作台开发与构建）
 - Git
 
 ### 1. 克隆项目
@@ -191,27 +206,13 @@ BUSINESS_API_BASE_URL=https://api.example.com
 BUSINESS_API_KEY=xxx
 ```
 
-### 4. 启动服务
-
-```bash
-.\start_demo.ps1
-```
-
-默认访问地址：`http://127.0.0.1:8080/demo`
-
-检查服务健康状态：
-
-```bash
-curl http://127.0.0.1:8080/ready
-```
-
-### 5. 启动完整前端工作台
-
-完整工作台是独立前端工程，首次启动会自动安装前端依赖：
+### 4. 启动完整工作台
 
 ```bash
 .\start_workbench.ps1
 ```
+
+启动脚本会读取 `.env.local`，拉起后端服务，并启动前端工作台。
 
 访问地址：
 
@@ -219,7 +220,21 @@ curl http://127.0.0.1:8080/ready
 http://127.0.0.1:5173
 ```
 
-也可以手动启动：
+检查服务健康状态：
+
+```bash
+curl http://127.0.0.1:8080/ready
+```
+
+### 5. 手动开发模式
+
+后端：
+
+```bash
+.\start_demo.ps1
+```
+
+前端：
 
 ```bash
 cd frontend
@@ -248,7 +263,9 @@ http://127.0.0.1:8080/workbench
 docker compose up --build
 ```
 
-启动后访问：`http://127.0.0.1:8080/demo`
+启动后访问：`http://127.0.0.1:8080/workbench`
+
+内置轻量演示页保留在：`http://127.0.0.1:8080/demo`
 
 ## 生产部署建议
 
@@ -322,7 +339,8 @@ BUSINESS_API_TIMEOUT=8
 ### 前端语法检查
 
 ```bash
-node --check .\webui\app.js
+cd frontend
+npm run build
 ```
 
 ### 代码语法检查
@@ -409,16 +427,9 @@ customer-service-agent/
 
 Mock 模式使用本地数据，适合开发调试；真实模式调用大模型和业务接口，适合生产环境。
 
-## 路线图
+## 工程扩展方向
 
-- [ ] 支持多租户隔离
-- [ ] 增加 Redis 缓存层
-- [ ] 支持多客服协同
-- [ ] 增加人工接管能力
-- [ ] 支持富文本消息
-- [x] Docker 容器化部署
-- [ ] Kubernetes 编排示例
-- [ ] 性能监控和告警
+项目的核心边界已经拆分为模型适配、知识库适配、业务工具、会话存储和前端工作台。后续扩展可以围绕多租户隔离、人工接管、多客服协同、富文本消息、缓存层和监控告警继续演进。
 
 ## 贡献指南
 
