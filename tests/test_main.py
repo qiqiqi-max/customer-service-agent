@@ -26,6 +26,7 @@ class TestRouteRegistration(unittest.TestCase):
         self.assertIn("/api/conversations", route_paths)
         self.assertIn("/health", route_paths)
         self.assertIn("/ready", route_paths)
+        self.assertIn("/workbench", route_paths)
         self.assertIn("/api/v3/bots/chat/completions/products", route_paths)
         self.assertIn("/api/v3/bots/chat/completions/save_faq", route_paths)
 

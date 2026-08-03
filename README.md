@@ -107,9 +107,9 @@ flowchart TB
 
 ### 前端
 
-- **技术**：原生 HTML / CSS / JavaScript
-- **特点**：无框架依赖、轻量级、SEO 友好
-- **设计**：去模板化、SaaS 工作台风格、移动端优先
+- **完整工作台**：React + Vite + TypeScript，位于 `frontend/`
+- **内置演示页**：原生 HTML / CSS / JavaScript，位于 `webui/`
+- **设计**：SaaS 工作台风格，覆盖接待、会话、商品、质检、知识沉淀和接入配置
 
 ### 大模型
 
@@ -203,6 +203,41 @@ BUSINESS_API_KEY=xxx
 
 ```bash
 curl http://127.0.0.1:8080/ready
+```
+
+### 5. 启动完整前端工作台
+
+完整工作台是独立前端工程，首次启动会自动安装前端依赖：
+
+```bash
+.\start_workbench.ps1
+```
+
+访问地址：
+
+```text
+http://127.0.0.1:5173
+```
+
+也可以手动启动：
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+构建生产前端：
+
+```bash
+cd frontend
+npm run build
+```
+
+构建完成后，后端会在 `/workbench` 托管 `frontend/dist`：
+
+```text
+http://127.0.0.1:8080/workbench
 ```
 
 ### Docker 启动
@@ -317,7 +352,15 @@ node --check .\webui\app.js
 ## 目录结构
 
 ```text
-backend/
+customer-service-agent/
+├── frontend/                  # React + Vite 完整工作台
+│   ├── src/
+│   │   ├── api/               # 前端 API SDK
+│   │   ├── data/              # 场景与能力配置
+│   │   ├── App.tsx            # 工作台主界面
+│   │   └── main.tsx           # 前端入口
+│   ├── package.json
+│   └── vite.config.ts
 ├── main.py                    # 服务入口
 ├── config.py                  # 配置管理
 ├── llm_provider.py            # 大模型适配层
@@ -336,7 +379,7 @@ backend/
 │   ├── order_check.py         # 订单查询
 │   ├── pack_track.py          # 物流查询
 │   └── order_refund.py        # 退款处理
-├── webui/                     # 前端
+├── webui/                     # 内置演示页
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js

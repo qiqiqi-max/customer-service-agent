@@ -61,6 +61,8 @@ from volcenginesdkarkruntime.types.chat.chat_completion import Choice
 
 BACKEND_DIR = Path(__file__).resolve().parent
 WEBUI_DIR = BACKEND_DIR / "webui"
+FRONTEND_DIST_DIR = BACKEND_DIR / "frontend" / "dist"
+FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
 
 @task()
@@ -364,6 +366,13 @@ async def demo_page():
     return FileResponse(WEBUI_DIR / "index.html")
 
 
+async def workbench_page():
+    frontend_index = FRONTEND_DIST_DIR / "index.html"
+    if frontend_index.exists():
+        return FileResponse(frontend_index)
+    return FileResponse(WEBUI_DIR / "index.html")
+
+
 async def conversations(limit: int = 50, account_id: Optional[str] = None):
     return list_conversations(limit=limit, account_id=account_id)
 
@@ -651,9 +660,16 @@ def register_routes(server: BotServer) -> BotServer:
     )
     server.app.add_api_route("/", demo_page, methods=["GET"])
     server.app.add_api_route("/demo", demo_page, methods=["GET"])
+    server.app.add_api_route("/workbench", workbench_page, methods=["GET"])
     server.app.add_api_route("/health", health_check, methods=["GET"])
     server.app.add_api_route("/ready", readiness_check, methods=["GET"])
     server.app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="webui")
+    if FRONTEND_ASSETS_DIR.exists():
+        server.app.mount(
+            "/assets",
+            StaticFiles(directory=FRONTEND_ASSETS_DIR),
+            name="frontend-assets",
+        )
     server.app.add_api_route(
         "/api/v3/bots/chat/completions/products",
         list_products,
