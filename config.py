@@ -39,6 +39,7 @@ conversation_db_path = os.getenv(
     "CONVERSATION_DB_PATH",
     str(BASE_DIR / "data" / "conversations.sqlite3"),
 )
+database_url = os.getenv("DATABASE_URL", "")
 api_keys = [
     key.strip()
     for key in os.getenv("API_KEYS", os.getenv("API_KEY", "")).split(",")

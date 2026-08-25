@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $frontendDir = Join-Path $scriptDir "frontend"
 $pythonExe = Join-Path $scriptDir ".venv\Scripts\python.exe"
+$alembicExe = Join-Path $scriptDir ".venv\Scripts\alembic.exe"
 $envFile = Join-Path $scriptDir ".env.local"
 
 function Write-Step {
@@ -59,6 +60,10 @@ if (-not (Test-Path $pythonExe)) {
     throw "Python virtual environment not found: $pythonExe"
 }
 
+if (-not (Test-Path $alembicExe)) {
+    throw "Alembic executable not found: $alembicExe"
+}
+
 if (-not (Test-Path $envFile)) {
     throw "Missing .env.local. Copy .env.local.example to .env.local first."
 }
@@ -69,6 +74,12 @@ if (-not (Test-Path $frontendDir)) {
 
 Write-Step "Loading local environment"
 Load-EnvFile -Path $envFile
+
+Write-Step "Applying database migrations"
+& $alembicExe upgrade head
+
+Write-Step "Seeding MySQL data"
+& $pythonExe -m tools.seed_mysql_data
 
 $port = [System.Environment]::GetEnvironmentVariable("_FAAS_RUNTIME_PORT", "Process")
 if (-not $port) {

@@ -6,12 +6,8 @@ This guide records the local setup and verification flow for running the backend
 
 - Windows PowerShell
 - Python 3.10.x
-- VolcEngine resources ready:
-  - AK/SK
-  - ARK API Key
-  - Product KB collection name
-  - FAQ KB collection name
-  - TOS bucket name (Beijing region)
+- MySQL 8.0 running locally
+- Navicat or another MySQL client for data inspection
 
 ## 2) Install dependencies
 
@@ -27,16 +23,18 @@ python -m venv .venv
 
 ## 3) Environment variables
 
-For local development without cloud resources, use mock mode:
+For local development, use local MySQL:
 
 ```powershell
-$env:MOCK_MODE="True"
+$env:MOCK_MODE="False"
 $env:LANGUAGE="zh"
+$env:DATABASE_URL="mysql+pymysql://customer_service_agent:change_me@127.0.0.1:3306/customer_service"
+$env:KNOWLEDGE_PROVIDER="mysql"
+$env:BUSINESS_DATA_PROVIDER="mysql"
 ```
 
-In mock mode, chat, summary, quality inspection, next-question generation, product
-listing, order lookup, logistics, refund simulation, and FAQ saving can all be
-tested locally.
+Products, orders, logistics, conversations, quality reviews, and FAQ records are
+stored in MySQL and can be viewed from Navicat through the project-only account.
 
 For real VolcEngine integration, set `MOCK_MODE=False` and configure:
 
@@ -95,7 +93,7 @@ $env:DIFY_TOP_K="5"
 If you only have one Dify dataset, set `DIFY_DATASET_ID` and
 `DIFY_FAQ_DATASET_ID` to the same value.
 
-To replace local mock order/logistics/refund data with a real business API, set:
+To replace local MySQL order/logistics/refund data with a real business API, set:
 
 ```powershell
 $env:BUSINESS_DATA_PROVIDER="http"
@@ -125,6 +123,7 @@ matching `http.request` event in `logs/app.log`.
 ## 4) Start backend
 
 ```powershell
+.\.venv\Scripts\alembic.exe upgrade head
 .\.venv\Scripts\python main.py
 ```
 

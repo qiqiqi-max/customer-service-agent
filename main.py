@@ -10,7 +10,15 @@ from uuid import uuid4
 import pandas as pd
 from volcenginesdkarkruntime import AsyncArk
 from agent_tools import build_openai_tools, build_tool_executor
+from audit_store import (
+    list_faq_candidates,
+    list_quality_reviews,
+    list_tool_calls,
+    save_faq_candidate,
+    save_quality_review,
+)
 from config import api_keys, endpoint_id, language, mock_mode
+from database import migrate_database
 from conversation_store import (
     attach_conversation_metadata,
     ConversationAccessError,
@@ -292,6 +300,7 @@ class FAQRequest(BaseModel):
     answer: str = Field(..., max_length=500)
     score: int = Field(..., ge=1, le=5)
     account_id: str = Field(..., max_length=100)
+    conversation_id: Optional[str] = Field(None, max_length=100)
 
 
 class BusinessChatMessage(BaseModel):
@@ -312,6 +321,8 @@ class BusinessChatRequest(BaseModel):
 class QualityCheckRequest(BaseModel):
     content: str = Field(..., max_length=8000)
     keywords: Optional[str] = Field(None, max_length=1000)
+    account_id: str = Field("100000", max_length=100)
+    conversation_id: Optional[str] = Field(None, max_length=100)
     model: str = "customer-service-agent"
 
 
@@ -393,6 +404,41 @@ async def conversation_detail(
     return conversation
 
 
+async def conversation_tool_calls(
+    conversation_id: str,
+    account_id: str,
+    limit: int = 100,
+):
+    return {
+        "conversation_id": conversation_id,
+        "tool_calls": list_tool_calls(
+            conversation_id,
+            account_id=account_id,
+            limit=limit,
+        ),
+    }
+
+
+async def quality_reviews(
+    account_id: str,
+    conversation_id: Optional[str] = None,
+    limit: int = 50,
+):
+    return {
+        "reviews": list_quality_reviews(
+            account_id=account_id,
+            conversation_id=conversation_id,
+            limit=limit,
+        )
+    }
+
+
+async def faq_candidates(account_id: Optional[str] = None, limit: int = 50):
+    return {
+        "candidates": list_faq_candidates(account_id=account_id, limit=limit),
+    }
+
+
 async def health_check():
     return {
         "status": "ok",
@@ -459,7 +505,15 @@ async def api_chat(chat: BusinessChatRequest):
 
 
 async def api_save_faq(faq: FAQRequest):
-    return await save_faq(faq)
+    result = await save_faq(faq)
+    save_faq_candidate(
+        account_id=faq.account_id,
+        conversation_id=faq.conversation_id,
+        question=faq.question,
+        answer=faq.answer,
+        score=faq.score,
+    )
+    return result
 
 
 async def api_quality_check(payload: QualityCheckRequest):
@@ -475,8 +529,17 @@ async def api_quality_check(payload: QualityCheckRequest):
         messages=[ArkMessage(role="user", content=content)],
     )
     response = await _collect_first_response(quality_inspection_chat, request)
+    result_text = _assistant_content(response)
+    save_quality_review(
+        account_id=payload.account_id,
+        conversation_id=payload.conversation_id,
+        content=payload.content,
+        keywords=payload.keywords,
+        result=result_text,
+        structured_result=structured_result,
+    )
     return {
-        "result": _assistant_content(response),
+        "result": result_text,
         "structured_result": structured_result,
         "metadata": response.metadata or {},
         "bot_usage": _bot_usage(response),
@@ -720,6 +783,24 @@ def register_routes(server: BotServer) -> BotServer:
         dependencies=business_api_dependencies,
     )
     server.app.add_api_route(
+        "/api/conversations/{conversation_id}/tool-calls",
+        conversation_tool_calls,
+        methods=["GET"],
+        dependencies=business_api_dependencies,
+    )
+    server.app.add_api_route(
+        "/api/quality-reviews",
+        quality_reviews,
+        methods=["GET"],
+        dependencies=business_api_dependencies,
+    )
+    server.app.add_api_route(
+        "/api/faq-candidates",
+        faq_candidates,
+        methods=["GET"],
+        dependencies=business_api_dependencies,
+    )
+    server.app.add_api_route(
         "/api/v3/bots/chat/completions/save_faq",
         save_faq,
         methods=["POST"],
@@ -748,6 +829,7 @@ def register_routes(server: BotServer) -> BotServer:
 
 def run_server() -> None:
     configure_runtime()
+    migrate_database()
     server = create_server()
     port = os.getenv("_FAAS_RUNTIME_PORT")
     server.run(app=server.app, port=int(port) if port else 8080, host="0.0.0.0")

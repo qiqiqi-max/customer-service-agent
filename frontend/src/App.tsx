@@ -236,7 +236,12 @@ export function App() {
     try {
       setQuality("正在检查最新回复...");
       const content = latestAssistantMessage?.content || messages.map((item) => item.content).join("\n");
-      const payload = await api.quality(content, qualityKeywords);
+      const payload = await api.quality(
+        content,
+        qualityKeywords,
+        conversationId,
+        accountId
+      );
       const structured = payload.structured_result;
       const prefix = structured
         ? `风险等级：${structured.risk_level ?? "unknown"}，命中 ${structured.hit_count ?? 0} 条\n`
@@ -256,7 +261,13 @@ export function App() {
         return;
       }
       setFaqResult("正在保存 FAQ...");
-      const payload = await api.saveFaq({ question, answer, score: faqScore, accountId });
+      const payload = await api.saveFaq({
+        question,
+        answer,
+        score: faqScore,
+        accountId,
+        conversationId
+      });
       setFaqResult(payload.message === "success" ? "FAQ 已保存到后端知识沉淀接口。" : "FAQ 已提交。");
     } catch (error) {
       setFaqResult(`保存失败：${error instanceof Error ? error.message : "未知错误"}`);

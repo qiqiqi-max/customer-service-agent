@@ -14,9 +14,10 @@
 - **完整工作台**：React + Vite + TypeScript 构建客服中控台，覆盖接待、会话、货架、质检和配置模块。
 - **模型可替换**：通过统一 Provider 层适配 DeepSeek、智谱、火山引擎和 OpenAI Compatible 服务。
 - **知识库可运营**：支持 Dify Dataset，商品知识和 FAQ 可由运营人员独立维护。
-- **业务工具可扩展**：订单查询、物流跟踪、退款处理抽象为工具层，可从 Mock 数据平滑切换到真实 HTTP 接口。
+- **业务工具可扩展**：订单查询、物流跟踪、退款处理抽象为工具层，默认直接读取本地 MySQL，后续也可切到真实 HTTP 接口。
 - **接待过程可追踪**：会话持久化、工具调用结果、结构化日志和质检结果可用于客服复盘。
 - **部署路径清晰**：支持本地启动、前后端分离开发、后端托管构建产物和 Docker 部署。
+- **数据库统一**：默认接入本地 MySQL，项目使用独立账号访问业务库，所有业务数据、会话和 FAQ 候选都可在 Navicat 里直接查看，并提供 Alembic 迁移脚本。
 
 ## 界面预览
 
@@ -89,11 +90,11 @@ flowchart TB
 
 **2. 知识与业务数据分离**
 
-稳定的商品介绍、售后规则等知识放在 Dify Dataset 中，由运营团队维护；实时的订单状态、物流节点等业务数据通过 HTTP 接口实时查询，保证数据时效性。
+稳定的商品介绍、售后规则等知识可以同步到 MySQL 或 Dify，由运营团队维护；实时的订单状态、物流节点等业务数据默认直接查询本地 MySQL，保证数据时效性。
 
 **3. 会话持久化与复盘能力**
 
-所有接待会话保存在 SQLite 中，支持历史会话查询、对话总结生成和 FAQ 沉淀。质检模块可以对历史会话进行批量审计。
+所有接待会话保存在 MySQL 中，支持历史会话查询、对话总结生成和 FAQ 沉淀。质检模块可以对历史会话进行批量审计。
 
 **4. 可观测性优先**
 
@@ -104,9 +105,9 @@ flowchart TB
 | 功能模块 | 说明 | 适用场景 |
 | --- | --- | --- |
 | 智能对话 | 流式/非流式回复，支持多轮上下文 | 商品咨询、售后解答 |
-| 知识检索 | Dify Dataset 语义检索，支持多知识库 | 商品介绍、FAQ 问答 |
+| 知识检索 | MySQL FAQ 直查，支持 Dify 同步 | 商品介绍、FAQ 问答 |
 | 工具调用 | 订单查询、物流跟踪、退款处理 | 订单状态查询、售后处理 |
-| 会话管理 | SQLite 持久化，支持会话查询和继续 | 客服交接、历史复盘 |
+| 会话管理 | MySQL 持久化，支持会话查询和继续 | 客服交接、历史复盘 |
 | 质检审计 | 本地规则质检 + 大模型质检 | 服务质量监控 |
 | 对话总结 | 自动生成接待摘要 | 工单归档、交接记录 |
 | FAQ 沉淀 | 高质量问答保存为知识 | 知识库迭代优化 |
@@ -117,7 +118,8 @@ flowchart TB
 
 - **框架**：FastAPI（异步高性能）、Arkitect BotServer（对话编排）
 - **语言**：Python 3.10+
-- **数据库**：SQLite（会话持久化）
+- **数据库**：SQLAlchemy + MySQL（会话、工具、质检、FAQ、商品、订单和物流记录）
+- **迁移**：Alembic
 - **日志**：JSON Lines 结构化日志
 
 ### 前端
@@ -139,8 +141,8 @@ flowchart TB
 
 | 方案 | 支持状态 | 推荐度 | 说明 |
 | --- | --- | --- | --- |
-| Dify Dataset | ✅ | ⭐⭐⭐ | 易于维护，支持多数据集 |
-| 火山引擎知识库 | ✅ | ⭐⭐ | 原始接口兼容 |
+| MySQL FAQ 表 | ✅ | ⭐⭐⭐ | 本地可见，方便维护与联调 |
+| Dify Dataset | ✅ | ⭐⭐ | 可选外部知识库同步 |
 
 ## 快速启动
 
@@ -176,12 +178,14 @@ uv sync
 cp .env.local.example .env.local
 ```
 
-**本地演示配置**（使用 Mock 数据）：
+**本地运行配置**（使用项目专用 MySQL 账号）：
 
 ```env
-MOCK_MODE=True
+MOCK_MODE=False
 LANGUAGE=zh
-BUSINESS_DATA_PROVIDER=mock
+DATABASE_URL=mysql+pymysql://customer_service_agent:change_me@127.0.0.1:3306/customer_service
+KNOWLEDGE_PROVIDER=mysql
+BUSINESS_DATA_PROVIDER=mysql
 API_KEYS=
 ```
 
@@ -212,7 +216,7 @@ BUSINESS_API_KEY=xxx
 .\start_workbench.ps1
 ```
 
-启动脚本会读取 `.env.local`，拉起后端服务，并启动前端工作台。
+启动脚本会读取 `.env.local`，执行 MySQL 迁移和种子初始化，拉起后端服务，并启动前端工作台。项目默认使用 `customer_service_agent` 账号访问 `customer_service` 库，root 仅保留做管理用途。
 
 访问地址：
 
@@ -259,8 +263,35 @@ http://127.0.0.1:8080/workbench
 
 项目也提供容器化启动方式，适合在演示环境或服务器上快速拉起：
 
+Docker Compose 会同时启动应用和 MySQL，并使用数据卷保存数据库文件：
+
 ```bash
 docker compose up --build
+```
+
+默认访问：
+
+```text
+http://127.0.0.1:8080/workbench
+```
+
+应用容器启动时会先执行 `alembic upgrade head`，再启动 FastAPI 服务。
+
+如需修改 MySQL 用户名、密码或端口，可在启动前设置 `MYSQL_USER`、
+`MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD`、`MYSQL_PORT` 等环境变量。
+
+### 数据库迁移
+
+本地 MySQL 会在首次启动时自动创建表并灌入基础数据。正式环境建议先执行：
+
+```bash
+.\.venv\Scripts\alembic.exe upgrade head
+```
+
+数据库连接示例：
+
+```bash
+python tools/seed_mysql_data.py
 ```
 
 启动后访问：`http://127.0.0.1:8080/workbench`
@@ -310,7 +341,7 @@ ZHIPU_MODEL=glm-4-plus
 
 ### 业务系统接入
 
-本地演示使用 Mock 数据，生产环境需要接入真实业务系统：
+本地默认使用 MySQL 数据，生产环境可以接入真实业务系统：
 
 ```env
 BUSINESS_DATA_PROVIDER=http
@@ -390,8 +421,8 @@ customer-service-agent/
 ├── observability.py           # 可观测性
 ├── data/                      # 数据模块
 │   ├── product.py             # 商品数据
-│   ├── orders.py              # 订单 Mock
-│   ├── tracking.py            # 物流 Mock
+│   ├── orders.py              # 订单数据
+│   ├── tracking.py            # 物流数据
 │   └── rag.py                 # 知识库检索
 ├── tools/                     # 业务工具
 │   ├── order_check.py         # 订单查询
@@ -417,15 +448,15 @@ customer-service-agent/
 
 ### 如何添加新的商品知识？
 
-在 Dify Dataset 中直接添加文档，无需重启服务。
+直接更新 MySQL 中的 `products` 或 `faq_documents` 表即可。
 
 ### 如何查看历史会话？
 
 访问 `GET /api/conversations` 获取会话列表，或通过前端工作台查看。
 
-### Mock 模式和真实模式有什么区别？
+### 现在还能用 mock 吗？
 
-Mock 模式使用本地数据，适合开发调试；真实模式调用大模型和业务接口，适合生产环境。
+mock 只保留为兼容测试和旧接口，日常运行默认走 MySQL 的项目专用账号。
 
 ## 工程扩展方向
 

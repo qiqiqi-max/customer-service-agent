@@ -13,30 +13,6 @@ http://127.0.0.1:8080
 
 If port 8080 is occupied, set `_FAAS_RUNTIME_PORT` before starting the service.
 
-## Local Mock Mode
-
-Mock mode lets you run all major APIs without VolcEngine credentials, knowledge
-base collections, or TOS buckets.
-
-Create `.env.local`:
-
-```powershell
-Copy-Item .env.local.example .env.local
-```
-
-Use these values for local development:
-
-```env
-MOCK_MODE=True
-LANGUAGE=zh
-```
-
-Then start:
-
-```powershell
-.\start_demo.ps1
-```
-
 ## Switch LLM Provider
 
 The backend supports three modes:
@@ -66,8 +42,7 @@ Uses a DeepSeek/OpenAI-compatible chat completions API. If your provider exposes
 `deepseekv4pro` under a different model ID, change only `DEEPSEEK_MODEL`.
 
 The current DeepSeek path uses the model for chat, summary, quality inspection,
-and next-question generation. Local order/logistics/refund mock data remains
-available through the UI and mock mode.
+and next-question generation.
 
 ```env
 MOCK_MODE=False
@@ -117,16 +92,10 @@ DIFY_SCORE_THRESHOLD=0
 is used for FAQ retrieval and FAQ saving. If you only have one Dify dataset, set
 both variables to the same dataset ID.
 
-## Switch Business Data Provider
+## Business Data
 
-Order lookup, logistics lookup, and refund handling now go through a shared
-business data service. Local development uses mock data by default:
-
-```env
-BUSINESS_DATA_PROVIDER=mock
-```
-
-To connect a real business system, expose an HTTP API and set:
+Order lookup, logistics lookup, and refund handling now read from MySQL by
+default. To connect a real business system later, expose an HTTP API and set:
 
 ```env
 BUSINESS_DATA_PROVIDER=http
@@ -455,19 +424,19 @@ Response:
 
 ## Conversations
 
-The backend now stores chat turns in a local SQLite database.
+The backend now stores chat turns in MySQL.
 
-Default database path:
-
-```text
-backend/data/conversations.sqlite3
-```
-
-Override with:
+Set `DATABASE_URL` to your project-only MySQL account:
 
 ```env
-CONVERSATION_DB_PATH=D:/path/to/conversations.sqlite3
+DATABASE_URL=mysql+pymysql://customer_service_agent:change_me@127.0.0.1:3306/customer_service
 ```
+
+Additional persistence endpoints:
+
+- `GET /api/conversations/{conversation_id}/tool-calls?account_id=...`
+- `GET /api/quality-reviews?account_id=...`
+- `GET /api/faq-candidates?account_id=...`
 
 List recent conversations:
 
@@ -624,5 +593,5 @@ Request:
 }
 ```
 
-In mock mode, FAQ data is saved locally under `data/mock_faq/`.
-In real mode, FAQ data is uploaded to TOS and added to the FAQ knowledge base.
+FAQ data is saved to MySQL by default.
+If `KNOWLEDGE_PROVIDER=dify`, FAQ data can also be synchronized to Dify.

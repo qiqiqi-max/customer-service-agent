@@ -24,4 +24,4 @@ COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 EXPOSE 8080
 
-CMD ["python", "main.py"]
+CMD ["sh", "-c", "alembic upgrade head && python main.py"]

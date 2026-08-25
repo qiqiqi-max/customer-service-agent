@@ -77,6 +77,12 @@ export const api = {
         accountId
       )}`
     ),
+  toolCalls: (conversationId: string, accountId: string, limit = 100) =>
+    request<{ conversation_id: string; tool_calls: unknown[] }>(
+      `/api/conversations/${encodeURIComponent(
+        conversationId
+      )}/tool-calls?account_id=${encodeURIComponent(accountId)}&limit=${limit}`
+    ),
   chat: (input: {
     message: string;
     accountId: string;
@@ -105,23 +111,37 @@ export const api = {
         model: "customer-service-agent"
       }
     }),
-  quality: (content: string, keywords: string) =>
+  quality: (
+    content: string,
+    keywords: string,
+    conversationId?: string | null,
+    accountId?: string
+  ) =>
     request<QualityResponse>("/api/quality-check", {
       method: "POST",
       body: {
         content,
         keywords,
+        account_id: accountId || "100000",
+        conversation_id: conversationId || undefined,
         model: "customer-service-agent"
       }
     }),
-  saveFaq: (input: { question: string; answer: string; score: number; accountId: string }) =>
+  saveFaq: (input: {
+    question: string;
+    answer: string;
+    score: number;
+    accountId: string;
+    conversationId?: string | null;
+  }) =>
     request<FAQResponse>("/api/faqs", {
       method: "POST",
       body: {
         question: input.question.slice(0, 100),
         answer: input.answer.slice(0, 500),
         score: input.score,
-        account_id: input.accountId
+        account_id: input.accountId,
+        conversation_id: input.conversationId || undefined
       }
     })
 };
