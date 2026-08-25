@@ -81,6 +81,16 @@ export function App() {
     () => SCENARIOS.find((item) => item.id === activeScenarioId) ?? SCENARIOS[0],
     [activeScenarioId]
   );
+  const activeViewItem = useMemo(
+    () => viewItems.find((item) => item.id === activeView) ?? viewItems[0],
+    [activeView]
+  );
+  const workspaceStats = [
+    { label: "场景", value: activeScenario.label },
+    { label: "工具", value: `${selectedFunctions.size} 项` },
+    { label: "货架", value: `${selectedProducts.size} 个` },
+    { label: "会话", value: conversationId ? "已归档" : "未归档" }
+  ];
 
   const latestUserMessage = [...messages].reverse().find((item) => item.role === "user");
   const latestAssistantMessage = [...messages].reverse().find((item) => item.role === "assistant");
@@ -345,10 +355,21 @@ export function App() {
 
       <main className="main-area">
         <header className="topbar">
-          <div>
+          <div className="topbar-copy">
             <span className="eyebrow">当前工作区</span>
-            <h1>{viewItems.find((item) => item.id === activeView)?.label ?? "接待"}</h1>
-            <p>把客户消息、业务工具、商品范围和质检沉淀放在一条操作链路里。</p>
+            <h1>{activeViewItem.label}</h1>
+            <p>把客户消息、工具结果、商品范围和质检复盘放在同一个操作面里。</p>
+            <div className="chip-row" aria-label="工作区概览">
+              <span className={`inline-status is-${health}`}>
+                {health === "online" ? "后端在线" : health === "checking" ? "检查中" : "后端离线"}
+              </span>
+              {workspaceStats.map((item) => (
+                <span key={item.label} className="workspace-chip">
+                  <em>{item.label}</em>
+                  <strong>{item.value}</strong>
+                </span>
+              ))}
+            </div>
           </div>
           <div className="topbar-actions">
             <button className="secondary-button" onClick={startNewConversation} type="button">
@@ -529,8 +550,27 @@ function DeskView(props: {
           <div>
             <span className="eyebrow">{props.activeScenario.label}</span>
             <h2>接待对话</h2>
+            <p>{props.activeScenario.tone}</p>
           </div>
-          <span className="status-badge">本地模拟，API 已接入</span>
+          <span className="status-badge">接入已就绪</span>
+        </div>
+
+        <div className="session-strip" aria-label="当前接待概览">
+          <div>
+            <span>当前场景</span>
+            <strong>{props.activeScenario.label}</strong>
+            <small>切换后会同步工具和推荐话术。</small>
+          </div>
+          <div>
+            <span>已启用能力</span>
+            <strong>{props.selectedFunctions.size} 项</strong>
+            <small>结果会写入右侧轨迹面板。</small>
+          </div>
+          <div>
+            <span>选中货架</span>
+            <strong>{props.selectedProducts.size} 个</strong>
+            <small>回答优先参考当前货架。</small>
+          </div>
         </div>
 
         <div className="prompt-strip">
