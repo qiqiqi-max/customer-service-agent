@@ -1,184 +1,106 @@
-﻿# Customer Service Agent
+# Customer Service Agent
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React%20%2B%20Vite-Workbench-3b82f6?style=flat-square&logo=react&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)
 
-面向电商客服场景的智能客服工作台。项目把大模型对话、Dify 知识库、订单/物流/退款工具、会话持久化、质检复盘和 FAQ 沉淀整合到一套可本地运行、可替换模型、可接入业务系统的 Agent 应用中。
+一个面向电商客服场景的智能客服工作台。它把大模型对话、知识库检索、订单/物流/退款工具、会话持久化、质检复盘和 FAQ 沉淀放到同一条业务链路里，方便本地演示，也方便后续接真实业务系统。
 
-它不是单纯的聊天 Demo，而是一套围绕客服日常工作流设计的中控台：客服可以在同一界面完成售前咨询、订单查询、物流解释、售后处理、会话复盘和知识沉淀。
+现在这版前端已经从“演示页”改成了更像实际工作的中控台：左侧是场景和能力开关，中间是接待对话，右侧是客户概况、工具轨迹和货架范围。界面更克制，也更适合拿来做简历展示。
 
-## 项目亮点
+## 项目截图
 
-- **完整工作台**：React + Vite + TypeScript 构建客服中控台，覆盖接待、会话、货架、质检和配置模块。
-- **模型可替换**：通过统一 Provider 层适配 DeepSeek、智谱、火山引擎和 OpenAI Compatible 服务。
-- **知识库可运营**：支持 Dify Dataset，商品知识和 FAQ 可由运营人员独立维护。
-- **业务工具可扩展**：订单查询、物流跟踪、退款处理抽象为工具层，默认直接读取本地 MySQL，后续也可切到真实 HTTP 接口。
-- **接待过程可追踪**：会话持久化、工具调用结果、结构化日志和质检结果可用于客服复盘。
-- **部署路径清晰**：支持本地启动、前后端分离开发、后端托管构建产物和 Docker 部署。
-- **数据库统一**：默认接入本地 MySQL，项目使用独立账号访问业务库，所有业务数据、会话和 FAQ 候选都可在 Navicat 里直接查看，并提供 Alembic 迁移脚本。
-
-## 界面预览
-
-### 桌面端工作台
+### 桌面端
 
 ![客服工作台桌面端](docs/images/workbench-desktop.png)
 
-### 移动端适配
+### 移动端
 
 ![客服工作台移动端](docs/images/workbench-mobile.png)
 
-## 适用场景
+## 这个项目解决什么问题
 
-- 电商店铺的智能客服接待系统
-- 售前导购、订单查询、物流解释、售后退款等客服自动化流程
-- Dify 知识库 + 大模型工具调用的 Agent 项目实践
-- 需要演示 RAG、Function Calling、业务系统接入和会话质检的工程样例
+- 把客服接待、业务查询、知识问答和质检复盘放到一个界面里
+- 让大模型回答不是“纯聊天”，而是结合知识库和工具结果
+- 让历史会话、FAQ 和质检记录能落库，方便复盘和迭代
+- 让商品知识和业务数据可以替换，后续能接 Dify、MySQL 或真实接口
 
-## 架构设计
+## 当前功能
 
-本项目采用分层架构，将客服业务逻辑与底层能力解耦：
-
-```mermaid
-flowchart TB
-  subgraph Frontend["前端层"]
-    UI["客服工作台 UI"]
-  end
-  
-  subgraph API["API 层"]
-    REST["RESTful API"]
-    Auth["API 鉴权"]
-  end
-  
-  subgraph Agent["Agent 层"]
-    Orchestrator["对话编排"]
-    LLM["大模型适配"]
-    KB["知识库适配"]
-  end
-  
-  subgraph Business["业务层"]
-    Tools["工具调用"]
-    Orders["订单查询"]
-    Tracking["物流跟踪"]
-    Refund["退款处理"]
-  end
-  
-  subgraph Data["数据层"]
-    Store["会话持久化"]
-    Logs["结构化日志"]
-  end
-  
-  UI --> REST
-  REST --> Auth
-  Auth --> Orchestrator
-  Orchestrator --> LLM
-  Orchestrator --> KB
-  Orchestrator --> Tools
-  Tools --> Orders
-  Tools --> Tracking
-  Tools --> Refund
-  Orchestrator --> Store
-  REST --> Logs
-```
-
-### 核心设计理念
-
-**1. 模型无关的工具调用层**
-
-不同大模型的工具调用格式不同，本项目通过统一的工具定义层抽象了这些差异。无论使用 DeepSeek 的 function calling、智谱的 tools，还是火山引擎的 bot tools，业务工具代码无需修改。
-
-**2. 知识与业务数据分离**
-
-稳定的商品介绍、售后规则等知识可以同步到 MySQL 或 Dify，由运营团队维护；实时的订单状态、物流节点等业务数据默认直接查询本地 MySQL，保证数据时效性。
-
-**3. 会话持久化与复盘能力**
-
-所有接待会话保存在 MySQL 中，支持历史会话查询、对话总结生成和 FAQ 沉淀。质检模块可以对历史会话进行批量审计。
-
-**4. 可观测性优先**
-
-结构化日志记录每次请求的完整链路：大模型调用耗时、知识库检索召回、工具执行结果、业务接口响应。便于定位性能瓶颈和业务问题。
-
-## 功能模块
-
-| 功能模块 | 说明 | 适用场景 |
-| --- | --- | --- |
-| 智能对话 | 流式/非流式回复，支持多轮上下文 | 商品咨询、售后解答 |
-| 知识检索 | MySQL FAQ 直查，支持 Dify 同步 | 商品介绍、FAQ 问答 |
-| 工具调用 | 订单查询、物流跟踪、退款处理 | 订单状态查询、售后处理 |
-| 会话管理 | MySQL 持久化，支持会话查询和继续 | 客服交接、历史复盘 |
-| 质检审计 | 本地规则质检 + 大模型质检 | 服务质量监控 |
-| 对话总结 | 自动生成接待摘要 | 工单归档、交接记录 |
-| FAQ 沉淀 | 高质量问答保存为知识 | 知识库迭代优化 |
+- 接待工作台
+- 会话历史查看
+- 商品货架管理
+- 质检和会话总结
+- FAQ 沉淀
+- 接入配置展示
+- MySQL 持久化
+- Dify 知识库对接入口
 
 ## 技术栈
 
 ### 后端
 
-- **框架**：FastAPI（异步高性能）、Arkitect BotServer（对话编排）
-- **语言**：Python 3.10+
-- **数据库**：SQLAlchemy + MySQL（会话、工具、质检、FAQ、商品、订单和物流记录）
-- **迁移**：Alembic
-- **日志**：JSON Lines 结构化日志
+- FastAPI
+- Python 3.10+
+- SQLAlchemy
+- MySQL
+- Alembic
 
 ### 前端
 
-- **完整工作台**：React + Vite + TypeScript，位于 `frontend/`
-- **内置演示页**：原生 HTML / CSS / JavaScript，位于 `webui/`
-- **设计**：客服中控台风格，覆盖接待、会话、货架、质检、知识沉淀和接入配置
+- React
+- Vite
+- TypeScript
+- Lucide Icons
 
-### 大模型
+### 模型与知识
 
-| 模型 | 支持状态 | 工具调用 | 推荐场景 |
-| --- | --- | --- | --- |
-| DeepSeek V3/V4 | ✅ | ✅ | 生产推荐，性价比高 |
-| 智谱 GLM-4/5 | ✅ | ✅ | 中文理解强 |
-| 火山引擎 Doubao | ✅ | ✅ | 原始接口兼容 |
-| OpenAI Compatible | ✅ | ✅ | 自建模型 |
+- DeepSeek
+- 智谱
+- 火山引擎
+- OpenAI Compatible
+- Dify Dataset
 
-### 知识库
+## 架构方式
 
-| 方案 | 支持状态 | 推荐度 | 说明 |
-| --- | --- | --- | --- |
-| MySQL FAQ 表 | ✅ | ⭐⭐⭐ | 本地可见，方便维护与联调 |
-| Dify Dataset | ✅ | ⭐⭐ | 可选外部知识库同步 |
+项目按“前端工作台 + 后端 API + 模型适配 + 业务工具 + 数据存储”拆开。
 
-## 快速启动
+- 前端只负责展示和交互
+- 后端负责对话编排、工具调用和数据读写
+- 模型层负责兼容不同厂商
+- 业务层负责订单、物流、退款等能力
+- 数据层负责会话、FAQ、商品和业务数据落库
 
-### 环境要求
+## 核心流程
 
-- Python 3.10 或 3.11
-- Node.js 18+（用于完整工作台开发与构建）
-- Git
+1. 客户发消息
+2. 后端先做意图识别
+3. 按需查知识库或调用业务工具
+4. 组合模型回复
+5. 把会话、工具结果和质检记录保存到数据库
+6. 高质量问答可沉淀成 FAQ
 
-### 1. 克隆项目
+## 本地启动
 
-```bash
-git clone https://github.com/qiqiqi-max/customer-service-agent.git
-cd customer-service-agent
-```
-
-### 2. 安装依赖
+### 1. 安装依赖
 
 ```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1  # Windows
-# source .venv/bin/activate    # Linux/Mac
-
+.\.venv\Scripts\Activate.ps1
 pip install uv
 uv sync
 ```
 
-### 3. 配置环境变量
+### 2. 配置环境变量
 
-复制配置模板：
+复制模板：
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-**本地运行配置**（使用项目专用 MySQL 账号）：
+本地运行常用配置：
 
 ```env
 MOCK_MODE=False
@@ -186,299 +108,51 @@ LANGUAGE=zh
 DATABASE_URL=mysql+pymysql://customer_service_agent:change_me@127.0.0.1:3306/customer_service
 KNOWLEDGE_PROVIDER=mysql
 BUSINESS_DATA_PROVIDER=mysql
-API_KEYS=
 ```
 
-**生产配置示例**：
-
-```env
-# 模型配置
-MOCK_MODE=False
-LLM_PROVIDER=deepseek
-DEEPSEEK_API_KEY=sk-xxx
-DEEPSEEK_MODEL=deepseek-chat
-
-# 知识库配置
-KNOWLEDGE_PROVIDER=dify
-DIFY_API_KEY=dataset-xxx
-DIFY_DATASET_ID=xxx-product
-DIFY_FAQ_DATASET_ID=xxx-faq
-
-# 业务系统配置
-BUSINESS_DATA_PROVIDER=http
-BUSINESS_API_BASE_URL=https://api.example.com
-BUSINESS_API_KEY=xxx
-```
-
-### 4. 启动完整工作台
+### 3. 启动工作台
 
 ```bash
 .\start_workbench.ps1
 ```
 
-启动脚本会读取 `.env.local`，执行 MySQL 迁移和种子初始化，拉起后端服务，并启动前端工作台。项目默认使用 `customer_service_agent` 账号访问 `customer_service` 库，root 仅保留做管理用途。
-
-访问地址：
+前端工作台地址：
 
 ```text
 http://127.0.0.1:5173
 ```
 
-检查服务健康状态：
-
-```bash
-curl http://127.0.0.1:8080/ready
-```
-
-### 5. 手动开发模式
-
-后端：
-
-```bash
-.\start_demo.ps1
-```
-
-前端：
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-构建生产前端：
-
-```bash
-cd frontend
-npm run build
-```
-
-构建完成后，后端会在 `/workbench` 托管 `frontend/dist`：
+后端健康检查：
 
 ```text
-http://127.0.0.1:8080/workbench
+http://127.0.0.1:8080/ready
 ```
 
-### Docker 启动
-
-项目也提供容器化启动方式，适合在演示环境或服务器上快速拉起：
-
-Docker Compose 会同时启动应用和 MySQL，并使用数据卷保存数据库文件：
-
-```bash
-docker compose up --build
-```
-
-默认访问：
+## 目录说明
 
 ```text
-http://127.0.0.1:8080/workbench
+customer-service-agent/
+├── frontend/          # React + Vite 工作台
+├── main.py            # 后端入口
+├── llm_provider.py    # 大模型适配
+├── business_services.py
+├── conversation_store.py
+├── agent_tools.py
+├── quality_rules.py
+├── data/              # 商品、订单、物流、RAG 数据
+├── tools/             # 订单、物流、退款工具
+├── docs/              # 知识库文档和截图
+└── tests/             # 测试
 ```
 
-应用容器启动时会先执行 `alembic upgrade head`，再启动 FastAPI 服务。
-
-如需修改 MySQL 用户名、密码或端口，可在启动前设置 `MYSQL_USER`、
-`MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD`、`MYSQL_PORT` 等环境变量。
-
-### 数据库迁移
-
-本地 MySQL 会在首次启动时自动创建表并灌入基础数据。正式环境建议先执行：
-
-```bash
-.\.venv\Scripts\alembic.exe upgrade head
-```
-
-数据库连接示例：
-
-```bash
-python tools/seed_mysql_data.py
-```
-
-启动后访问：`http://127.0.0.1:8080/workbench`
-
-内置轻量演示页保留在：`http://127.0.0.1:8080/demo`
-
-## 生产部署建议
-
-### 大模型选择
-
-**DeepSeek V3/V4 Pro**（推荐）
-
-- 性价比最高，工具调用稳定
-- 中文理解能力强
-- 支持流式输出
-
-```env
-LLM_PROVIDER=deepseek
-DEEPSEEK_API_KEY=sk-xxx
-DEEPSEEK_MODEL=deepseek-chat
-```
-
-**智谱 GLM-5**
-
-- 中文场景表现优秀
-- 工具调用准确率高
-
-```env
-LLM_PROVIDER=zhipu
-ZHIPU_API_KEY=xxx
-ZHIPU_MODEL=glm-4-plus
-```
-
-### 知识库配置
-
-推荐在 Dify 中创建两个独立的 Dataset：
-
-1. **商品知识库**：商品介绍、规格、适配、使用说明
-2. **FAQ 知识库**：售后政策、常见问题、客服话术
-
-本项目提供了开箱即用的知识文件：
+## 知识库文件
 
 - `docs/dify_product_service_knowledge.md`
 - `docs/dify_faq_knowledge.md`
 
-直接导入 Dify 即可使用。
+这两个文件可以直接导入 Dify，分别用于商品知识和 FAQ 知识。
 
-### 业务系统接入
+## 说明
 
-本地默认使用 MySQL 数据，生产环境可以接入真实业务系统：
+这个项目不是单纯的聊天 Demo。它更像一个客服 Agent 的工作台样板，重点在于把模型、知识、工具和数据串成一条完整链路。
 
-```env
-BUSINESS_DATA_PROVIDER=http
-BUSINESS_API_BASE_URL=https://your-api.example.com
-BUSINESS_API_KEY=xxx
-BUSINESS_API_TIMEOUT=8
-```
-
-业务系统需要实现以下接口：
-
-- `GET /orders?account_id={id}` - 查询用户订单列表
-- `GET /orders/{order_id}?account_id={id}` - 查询订单详情
-- `GET /tracking?order_id={id}&tracking_number={num}` - 查询物流
-- `POST /refunds` - 提交退款申请
-
-详见 [API.md](API.md)。
-
-## 测试
-
-### 单元测试
-
-```bash
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
-
-### 前端语法检查
-
-```bash
-cd frontend
-npm run build
-```
-
-### 代码语法检查
-
-```bash
-.\.venv\Scripts\python.exe -m compileall -q main.py config.py
-```
-
-## 扩展开发
-
-### 添加新的业务工具
-
-1. 在 `tools/` 目录下创建新的工具模块
-2. 在 `agent_tools.py` 中注册工具定义
-3. 在 `business_services.py` 中实现业务逻辑
-
-### 接入新的大模型
-
-1. 在 `llm_provider.py` 中添加新的 Provider 类
-2. 实现 `chat_completion()` 和 `chat_completion_stream()` 方法
-3. 在 `.env.local` 中配置新模型参数
-
-### 自定义质检规则
-
-编辑 `quality_rules.py`，添加新的质检规则函数。
-
-## 目录结构
-
-```text
-customer-service-agent/
-├── frontend/                  # React + Vite 完整工作台
-│   ├── src/
-│   │   ├── api/               # 前端 API SDK
-│   │   ├── data/              # 场景与能力配置
-│   │   ├── App.tsx            # 工作台主界面
-│   │   └── main.tsx           # 前端入口
-│   ├── package.json
-│   └── vite.config.ts
-├── main.py                    # 服务入口
-├── config.py                  # 配置管理
-├── llm_provider.py            # 大模型适配层
-├── business_services.py       # 业务数据层
-├── conversation_store.py      # 会话持久化
-├── agent_tools.py             # 工具调用定义
-├── mock_agent.py              # Mock 模式实现
-├── quality_rules.py           # 质检规则
-├── observability.py           # 可观测性
-├── data/                      # 数据模块
-│   ├── product.py             # 商品数据
-│   ├── orders.py              # 订单数据
-│   ├── tracking.py            # 物流数据
-│   └── rag.py                 # 知识库检索
-├── tools/                     # 业务工具
-│   ├── order_check.py         # 订单查询
-│   ├── pack_track.py          # 物流查询
-│   └── order_refund.py        # 退款处理
-├── webui/                     # 内置演示页
-│   ├── index.html
-│   ├── styles.css
-│   └── app.js
-├── docs/                      # 文档和资源
-│   ├── images/
-│   ├── dify_product_service_knowledge.md
-│   ├── dify_faq_knowledge.md
-│   └── knowledge_source/      # 商品与 FAQ 原始素材（docx / xlsx）
-└── tests/                     # 测试
-```
-
-## 常见问题
-
-### 如何切换大模型？
-
-修改 `.env.local` 中的 `LLM_PROVIDER` 和对应的 API Key。
-
-### 如何添加新的商品知识？
-
-直接更新 MySQL 中的 `products` 或 `faq_documents` 表即可。
-
-### 如何查看历史会话？
-
-访问 `GET /api/conversations` 获取会话列表，或通过前端工作台查看。
-
-### 现在还能用 mock 吗？
-
-mock 只保留为兼容测试和旧接口，日常运行默认走 MySQL 的项目专用账号。
-
-## 工程扩展方向
-
-项目的核心边界已经拆分为模型适配、知识库适配、业务工具、会话存储和前端工作台。后续扩展可以围绕多租户隔离、人工接管、多客服协同、富文本消息、缓存层和监控告警继续演进。
-
-## 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-提交代码前请确保：
-
-1. 通过所有单元测试
-2. 代码符合 PEP 8 规范
-3. 补充必要的测试用例
-4. 更新相关文档
-
-## 许可证
-
-MIT License
-
-## 联系方式
-
-如有问题或建议，欢迎通过 GitHub Issues 联系。
-
-如果这个项目对你有帮助，请给个 ⭐ Star！
