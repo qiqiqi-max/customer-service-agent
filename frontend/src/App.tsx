@@ -3,7 +3,6 @@ import {
   Archive,
   Bot,
   ClipboardCheck,
-  Clock3,
   FileText,
   Gauge,
   History,
@@ -383,13 +382,6 @@ export function App() {
           </div>
         </header>
 
-        <section className="metric-grid">
-          <Metric icon={MessageSquareText} label="消息数" value={String(messages.length)} />
-          <Metric icon={ShieldCheck} label="启用工具" value={`${selectedFunctions.size} 项`} />
-          <Metric icon={PackageCheck} label="货架范围" value={`${selectedProducts.size} 个`} />
-          <Metric icon={Clock3} label="当前会话" value={conversationId ? "已归档" : "未归档"} />
-        </section>
-
         {activeView === "desk" && (
           <DeskView
             activeScenario={activeScenario}
@@ -555,24 +547,6 @@ function DeskView(props: {
           <span className="status-badge">接入已就绪</span>
         </div>
 
-        <div className="session-strip" aria-label="当前接待概览">
-          <div>
-            <span>当前场景</span>
-            <strong>{props.activeScenario.label}</strong>
-            <small>切换后会同步工具和推荐话术。</small>
-          </div>
-          <div>
-            <span>已启用能力</span>
-            <strong>{props.selectedFunctions.size} 项</strong>
-            <small>结果会写入右侧轨迹面板。</small>
-          </div>
-          <div>
-            <span>选中货架</span>
-            <strong>{props.selectedProducts.size} 个</strong>
-            <small>回答优先参考当前货架。</small>
-          </div>
-        </div>
-
         <div className="prompt-strip">
           {props.activeScenario.prompts.map((prompt) => (
             <button key={prompt} onClick={() => props.onPrompt(prompt)} type="button">
@@ -591,6 +565,22 @@ function DeskView(props: {
               </div>
             </article>
           ))}
+          {props.messages.length <= 1 && (
+            <div className="empty-workflow">
+              <div>
+                <strong>1. 选择场景</strong>
+                <span>售前、订单、物流、售后会自动匹配不同工具。</span>
+              </div>
+              <div>
+                <strong>2. 输入问题</strong>
+                <span>也可以直接点击上方快捷话术开始测试。</span>
+              </div>
+              <div>
+                <strong>3. 复盘沉淀</strong>
+                <span>工具轨迹、结果卡片和 FAQ 会保留在右侧。</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <form className="composer" id="composer-form" onSubmit={props.onSend}>
@@ -625,16 +615,20 @@ function DeskView(props: {
             <span className="count-badge">{props.selectedProducts.size}</span>
           </div>
           <div className="product-mini-list">
-            {props.products.slice(0, 8).map((product) => (
-              <label key={product.name} className="product-mini">
-                <input
-                  checked={props.selectedProducts.has(product.name)}
-                  onChange={() => props.onToggleProduct(product.name)}
-                  type="checkbox"
-                />
-                <span>{product.name}</span>
-              </label>
-            ))}
+            {props.products.length ? (
+              props.products.slice(0, 8).map((product) => (
+                <label key={product.name} className="product-mini">
+                  <input
+                    checked={props.selectedProducts.has(product.name)}
+                    onChange={() => props.onToggleProduct(product.name)}
+                    type="checkbox"
+                  />
+                  <span>{product.name}</span>
+                </label>
+              ))
+            ) : (
+              <p className="empty">商品数据暂未载入。</p>
+            )}
           </div>
         </section>
       </aside>
@@ -912,17 +906,6 @@ function SettingsView() {
         </div>
       </div>
     </section>
-  );
-}
-
-function Metric(props: { icon: typeof MessageSquareText; label: string; value: string }) {
-  const Icon = props.icon;
-  return (
-    <article className="metric-card">
-      <Icon size={18} />
-      <span>{props.label}</span>
-      <strong>{props.value}</strong>
-    </article>
   );
 }
 
