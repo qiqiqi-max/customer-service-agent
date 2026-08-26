@@ -502,7 +502,7 @@ async function handleSendMessage(event) {
   const selectedProducts = Array.from(state.selectedProducts);
   const legacyBody = {
     stream: refs.streamMode.checked,
-    model: "shop-assist-demo",
+    model: "customer-service-agent",
     metadata: {
       account_id: accountId,
       ...(state.conversationId ? { conversation_id: state.conversationId } : {}),
@@ -674,7 +674,7 @@ async function handleNextQuestion() {
     "/api/v3/bots/chat/completions/next_question",
     {
       stream: false,
-      model: "shop-assist-demo",
+      model: "customer-service-agent",
       messages: state.messages,
     }
   );

@@ -140,22 +140,30 @@ Copy-Item .env.local.example .env.local
 Fill in the real values inside `.env.local`, then use:
 
 ```powershell
-.\start_demo.ps1
+.\start_workbench.ps1
 ```
 
 Or just double-click:
 
-- `start_demo.cmd`
+- `start_workbench.cmd`
 
 This script will:
 
 - load local environment variables from `.env.local`
-- stop an old `customer-service-agent` `main.py` process if one already exists
+- apply Alembic database migrations
+- ensure starter MySQL data exists without clearing existing records
 - start the backend
 - wait for `/v1/ping`
-- open the browser at `http://127.0.0.1:8080/demo`
+- start the React workbench
+- open the browser at `http://127.0.0.1:5173`
 
-### Stop the local demo
+To intentionally reset starter product/order/tracking/FAQ data, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.seed_mysql_data --reset
+```
+
+### Stop the local workbench
 
 ```powershell
 .\stop_demo.ps1
@@ -177,11 +185,11 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/v1/ping
 
 Expected: `StatusCode : 200`
 
-## 5.1) Open demo UI
+## 5.1) Open workbench UI
 
-After the backend starts, open the browser:
+After the workbench starts, open the browser:
 
-`http://127.0.0.1:8080/demo`
+`http://127.0.0.1:5173`
 
 This page provides a lightweight web UI for:
 

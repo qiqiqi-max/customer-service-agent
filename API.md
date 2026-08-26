@@ -67,7 +67,7 @@ can show order, logistics, refund, and knowledge-base results in the right panel
 
 ## Switch Knowledge Base Provider
 
-The original project uses VolcEngine Knowledge Base:
+Legacy compatibility with VolcEngine Knowledge Base:
 
 ```env
 KNOWLEDGE_PROVIDER=volcengine
@@ -208,8 +208,8 @@ Response:
 
 ## Standard Business APIs
 
-These endpoints wrap the original demo APIs into a simpler business-facing
-shape. The legacy `/api/v3/bots/chat/completions/*` paths remain available.
+These endpoints provide a simpler business-facing shape. The legacy
+`/api/v3/bots/chat/completions/*` paths remain available for compatibility.
 
 Optional API key auth can be enabled for standard `/api/*` business endpoints:
 

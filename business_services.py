@@ -43,23 +43,32 @@ class BusinessDataService(ABC):
         pass
 
 
-class MockBusinessDataService(BusinessDataService):
+class LocalDatabaseBusinessDataService(BusinessDataService):
+    def __init__(self, provider_name: str = "mysql"):
+        self.provider_name = provider_name
+
     async def get_order(self, account_id: str, order_id: str) -> Any:
         started = monotonic()
         result = await orders.get_order(account_id, order_id)
-        _log_business_call("get_order", "mock", account_id, started, result)
+        _log_business_call("get_order", self.provider_name, account_id, started, result)
         return result
 
     async def get_orders_by_product(self, account_id: str, product: str) -> Any:
         started = monotonic()
         result = await orders.get_orders_by_product(account_id, product)
-        _log_business_call("get_orders_by_product", "mock", account_id, started, result)
+        _log_business_call(
+            "get_orders_by_product",
+            self.provider_name,
+            account_id,
+            started,
+            result,
+        )
         return result
 
     async def get_all_orders(self, account_id: str) -> Any:
         started = monotonic()
         result = await orders.get_all_orders(account_id)
-        _log_business_call("get_all_orders", "mock", account_id, started, result)
+        _log_business_call("get_all_orders", self.provider_name, account_id, started, result)
         return result
 
     async def get_tracking(
@@ -73,25 +82,25 @@ class MockBusinessDataService(BusinessDataService):
             order = await orders.get_order(account_id, order_id)
             if not order:
                 result = "Order information not found"
-                _log_business_call("get_tracking", "mock", account_id, started, result)
+                _log_business_call("get_tracking", self.provider_name, account_id, started, result)
                 return result
             if order["status"] == OrderStatus.REFUNDED.value:
                 result = "Order has been refunded, no shipping information available"
-                _log_business_call("get_tracking", "mock", account_id, started, result)
+                _log_business_call("get_tracking", self.provider_name, account_id, started, result)
                 return result
             if order["status"] == OrderStatus.PENDING.value:
                 result = "Order has not been shipped yet, no tracking information available"
-                _log_business_call("get_tracking", "mock", account_id, started, result)
+                _log_business_call("get_tracking", self.provider_name, account_id, started, result)
                 return result
             tracking_number = order.get("tracking_number") or ""
 
         if not tracking_number:
             result = "Order has no tracking number"
-            _log_business_call("get_tracking", "mock", account_id, started, result)
+            _log_business_call("get_tracking", self.provider_name, account_id, started, result)
             return result
 
         result = tracking.get_tracking_info(tracking_number)
-        _log_business_call("get_tracking", "mock", account_id, started, result)
+        _log_business_call("get_tracking", self.provider_name, account_id, started, result)
         return result
 
     async def refund_order(self, account_id: str, order_id: str, reason: str = "") -> Any:
@@ -99,11 +108,11 @@ class MockBusinessDataService(BusinessDataService):
         order = await orders.get_order(account_id, order_id)
         if not order:
             result = "Order does not exist"
-            _log_business_call("refund_order", "mock", account_id, started, result)
+            _log_business_call("refund_order", self.provider_name, account_id, started, result)
             return result
         if order["status"] == OrderStatus.REFUNDED.value:
             result = "Order has already been refunded, cannot refund again"
-            _log_business_call("refund_order", "mock", account_id, started, result)
+            _log_business_call("refund_order", self.provider_name, account_id, started, result)
             return result
         success = await orders.update_order_status(
             account_id,
@@ -112,8 +121,13 @@ class MockBusinessDataService(BusinessDataService):
             reason,
         )
         result = "Refund successful" if success else "Refund failed"
-        _log_business_call("refund_order", "mock", account_id, started, result)
+        _log_business_call("refund_order", self.provider_name, account_id, started, result)
         return result
+
+
+class MockBusinessDataService(LocalDatabaseBusinessDataService):
+    def __init__(self):
+        super().__init__("mock")
 
 
 class HttpBusinessDataService(BusinessDataService):
@@ -276,8 +290,15 @@ def get_business_service() -> BusinessDataService:
 
     if provider == "http":
         _service = HttpBusinessDataService(base_url, api_key, timeout)
-    else:
+    elif provider in {"mysql", "local", "database"}:
+        _service = LocalDatabaseBusinessDataService(provider_name=provider)
+    elif provider == "mock":
         _service = MockBusinessDataService()
+    else:
+        raise BusinessServiceError(
+            f"Unsupported BUSINESS_DATA_PROVIDER={provider!r}. "
+            "Use mysql, local, mock, or http."
+        )
     _service_key = service_key
     return _service
 

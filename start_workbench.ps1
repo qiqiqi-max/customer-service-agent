@@ -78,7 +78,7 @@ Load-EnvFile -Path $envFile
 Write-Step "Applying database migrations"
 & $alembicExe upgrade head
 
-Write-Step "Seeding MySQL data"
+Write-Step "Ensuring MySQL starter data"
 & $pythonExe -m tools.seed_mysql_data
 
 $port = [System.Environment]::GetEnvironmentVariable("_FAAS_RUNTIME_PORT", "Process")

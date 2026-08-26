@@ -1,13 +1,18 @@
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
-from business_services import MockBusinessDataService, reset_business_service
+from business_services import (
+    LocalDatabaseBusinessDataService,
+    get_business_service,
+    reset_business_service,
+)
 
 
-class TestMockBusinessDataService(unittest.IsolatedAsyncioTestCase):
+class TestLocalDatabaseBusinessDataService(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         reset_business_service()
-        self.service = MockBusinessDataService()
+        self.service = LocalDatabaseBusinessDataService()
         self.account_id = f"svc_{uuid4().hex}"
 
     async def test_order_tracking_and_refund_flow(self):
@@ -49,6 +54,18 @@ class TestMockBusinessDataService(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIn("not been shipped", tracking)
+
+
+class TestBusinessServiceFactory(unittest.TestCase):
+    def tearDown(self):
+        reset_business_service()
+
+    def test_mysql_provider_uses_local_database_service(self):
+        with patch("business_services.config.business_data_provider", "mysql"):
+            service = get_business_service()
+
+        self.assertIsInstance(service, LocalDatabaseBusinessDataService)
+        self.assertEqual(service.provider_name, "mysql")
 
 
 if __name__ == "__main__":

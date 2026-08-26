@@ -1,7 +1,7 @@
 [project]
 name = "customer-service-agent"
 version = "0.1.0"
-description = "Customer service agent demo backend with real and mock integration modes."
+description = "Customer service agent workbench backend with MySQL persistence and compatibility modes."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
