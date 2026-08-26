@@ -124,7 +124,20 @@ npm install
 cd ..
 ```
 
-### 3. 配置环境变量
+### 3. 准备 MySQL
+
+本地创建项目数据库和项目专属用户。密码请按自己的环境调整：
+
+```sql
+CREATE DATABASE customer_service CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'customer_service_agent'@'127.0.0.1' IDENTIFIED BY 'change_me';
+GRANT ALL PRIVILEGES ON customer_service.* TO 'customer_service_agent'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
+
+这个用户只需要访问 `customer_service` 这个库。日常运行项目时建议使用项目专属账号，`root` 保留给数据库管理。
+
+### 4. 配置环境变量
 
 复制模板：
 
@@ -144,7 +157,7 @@ BUSINESS_DATA_PROVIDER=mysql
 
 如果要接真实大模型，需要把 `.env.local` 中对应厂商的 API Key 和模型名改成有效值。仓库里的示例值只是占位符。
 
-### 4. 启动工作台
+### 5. 启动工作台
 
 ```powershell
 .\start_workbench.ps1
