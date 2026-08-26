@@ -5,137 +5,134 @@
 ![React](https://img.shields.io/badge/React%20%2B%20Vite-Workbench-3b82f6?style=flat-square&logo=react&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-Persistence-4479A1?style=flat-square&logo=mysql&logoColor=white)
 
-Customer Service Agent 是一个面向电商客服场景的智能客服工作台。项目把大模型对话、商品知识、订单查询、物流跟踪、退款处理、会话归档、质检复盘和 FAQ 沉淀放在同一套业务流程里，适合用来演示客服 Agent 在真实业务中的基本工作方式。
+面向电商售后场景的智能客服 Agent 工作台。项目把接待对话、知识库检索、订单/物流/退款工具、会话留痕、质检复盘和 FAQ 沉淀放在同一套流程里，适合做本地演示、简历项目展示，也可以继续扩展到真实业务系统。
 
-这版项目已经从单页演示整理成了前后端分离的工作台：前端负责接待操作和过程展示，后端负责模型编排、工具调用、接口鉴权和数据落库，MySQL 保存商品、订单、物流、会话和质检数据。启动脚本会自动执行迁移，并补齐缺失的基础数据，不会在每次启动时清空已有记录。
+当前版本已经从早期演示页升级为工作台结构：左侧管理场景和能力开关，中间处理客服会话，右侧展示客户概况、工具调用轨迹和商品范围。业务数据默认走 MySQL，Dify 可作为外部知识库来源，模型层支持 DeepSeek、智谱、火山引擎和 OpenAI Compatible 接口。
 
 ## 项目截图
 
-### 桌面端工作台
+### 桌面端
 
 ![客服工作台桌面端](docs/images/workbench-desktop.png)
 
-### 移动端适配
+### 移动端
 
 ![客服工作台移动端](docs/images/workbench-mobile.png)
 
-## 功能范围
+## 项目能力
 
-- **接待工作台**：支持售前导购、订单查询、物流咨询、售后退款等常见客服场景。
-- **能力开关**：可以按场景选择商品介绍、导购推荐、订单查询、物流跟踪和退款退货工具。
-- **工具轨迹**：展示模型调用业务工具后的输入、输出和结果卡片，方便复盘。
-- **会话归档**：客户消息、助手回复和工具调用会保存到数据库，可按账号查看历史会话。
-- **商品货架**：商品信息由 MySQL 读取，前端可以控制本轮参与回答的商品范围。
-- **质检复盘**：支持会话总结、关键词质检和结构化风险结果保存。
-- **FAQ 沉淀**：可以把高质量问答保存为 FAQ，后续作为知识检索内容使用。
-- **多模型适配**：预留 DeepSeek、智谱、火山引擎和 OpenAI-compatible 接入方式。
-- **知识库扩展**：默认支持 MySQL FAQ 检索，也保留 Dify Dataset 接入入口。
+- 接待工作台：提供客服对话、商品范围选择、流式回复开关和接待上下文展示。
+- 知识问答：支持本地 FAQ/MySQL 知识数据，也预留 Dify Dataset 检索入口。
+- 业务工具：封装订单查询、物流查询、退款处理等售后能力。
+- 会话持久化：保存会话、消息、工具调用记录，便于追踪一次回复的来源。
+- 质检复盘：基于规则配置检查客服话术风险，并保存质检结果。
+- FAQ 沉淀：将高质量问答保存为候选 FAQ，用于后续知识库维护。
+- 多模型适配：兼容 DeepSeek、智谱、火山引擎和 OpenAI Compatible API。
+- MySQL 数据层：商品、订单、物流、FAQ、会话和质检数据统一落库，方便用 Navicat 查看。
 
 ## 技术栈
 
-后端：
+### 后端
 
-- Python 3.10+
-- FastAPI
-- SQLAlchemy
-- Alembic
-- MySQL
-- Pytest
+- FastAPI：提供对话、商品、会话、工具轨迹等 HTTP API。
+- SQLAlchemy：统一管理 MySQL/SQLite 数据访问。
+- Alembic：管理数据库迁移。
+- PyMySQL：连接本地或远程 MySQL。
+- Python 3.10+：实现 Agent 编排、业务工具和质检规则。
 
-前端：
+### 前端
 
-- React
-- Vite
-- TypeScript
-- Lucide React
+- React：构建客服工作台界面。
+- Vite：负责本地开发服务和前端打包。
+- TypeScript：给前端组件和数据结构提供类型约束。
+- Lucide Icons：提供工作台图标。
 
-模型与知识：
+### 模型与知识库
 
-- DeepSeek / 智谱 / 火山引擎
-- OpenAI-compatible Chat Completions
-- MySQL FAQ
-- Dify Dataset
+- DeepSeek / 智谱 / 火山引擎：作为可切换的大模型提供方。
+- OpenAI Compatible：兼容同类 Chat Completions 接口。
+- Dify Dataset：作为可选的外部知识库检索来源。
+- MySQL FAQ：作为本地可控的 FAQ 数据来源。
 
-## 项目结构
+## 架构说明
+
+项目按照“前端工作台 + 后端 API + Agent 编排 + 业务工具 + 数据存储”的方式拆分。
 
 ```text
 customer-service-agent/
-├── frontend/          # React + Vite 工作台
-├── main.py            # 后端入口和 API 路由
-├── llm_provider.py    # 大模型适配
-├── business_services.py
-├── conversation_store.py
-├── audit_store.py
-├── agent_tools.py
-├── quality_rules.py
-├── database.py        # SQLAlchemy 表结构和数据库初始化
-├── alembic/           # 数据库迁移
-├── data/              # 商品、订单、物流、RAG 数据访问
-├── tools/             # 数据初始化和业务辅助脚本
-├── docs/              # 知识库文档和项目截图
-└── tests/             # 后端测试
-```
-
-## 数据库设计
-
-项目当前使用 MySQL 作为主要数据存储，核心表包括：
-
-- `products`：商品名称、描述和图片地址
-- `orders`：订单状态、客户账号、商品和物流单号
-- `tracking_events`：物流轨迹节点
-- `faq_documents`：已沉淀的 FAQ 知识
-- `conversations`：会话主表
-- `messages`：会话消息，外键关联 `conversations`
-- `tool_calls`：工具调用记录，外键关联 `conversations`
-- `quality_reviews`：质检记录，可关联会话
-- `faq_candidates`：从接待中沉淀的 FAQ 候选，可关联会话
-
-启动时会先执行 Alembic 迁移，再检查基础数据。默认 seed 是幂等的：如果表里已有数据，不会清空重建。需要重置基础商品、订单、物流和 FAQ 时，可以手动执行：
-
-```bash
-.\.venv\Scripts\python.exe -m tools.seed_mysql_data --reset
+├── frontend/                 # React + Vite 工作台
+├── main.py                   # FastAPI 入口与路由注册
+├── llm_provider.py           # 大模型适配层
+├── business_services.py      # 业务数据服务，支持 MySQL/HTTP/兼容模式
+├── agent_tools.py            # Agent 可调用的订单、物流、退款工具
+├── conversation_store.py     # 会话与消息持久化
+├── quality_rules.py          # 本地质检规则
+├── database.py               # SQLAlchemy 表结构和数据库连接
+├── alembic/                  # 数据库迁移脚本
+├── tools/                    # 数据初始化、迁移和业务脚本
+├── docs/                     # 知识库文档和项目截图
+└── tests/                    # 单元测试
 ```
 
 ## 核心流程
 
-1. 客户在工作台输入问题。
-2. 前端把账号、会话、商品范围和能力开关传给后端。
-3. 后端构建客服 Agent 的上下文。
-4. Agent 按需检索 FAQ 或调用订单、物流、退款工具。
-5. 后端保存会话、工具轨迹和模型回复。
-6. 运营侧可以继续做总结、质检和 FAQ 沉淀。
+1. 客户在工作台发起问题。
+2. 后端接收消息，整理会话上下文、商品范围和账户信息。
+3. Agent 根据问题检索知识库，必要时调用订单、物流、退款工具。
+4. 大模型结合系统提示、知识库内容和工具结果生成客服回复。
+5. 后端保存会话、消息、工具结果、质检结果和 FAQ 候选数据。
+6. 前端展示回复内容、客户信息、工具轨迹和可复盘记录。
+
+## MySQL 与 Dify 分工
+
+- MySQL：保存结构化业务数据，包括商品、订单、物流、会话、消息、工具调用、质检记录和 FAQ 候选。
+- Dify：保存可检索的知识库文档，适合放商品说明、售后政策、活动规则和客服问答资料。
+- 当前项目默认可以使用 MySQL 本地数据运行；切到 Dify 时，需要在 `.env.local` 中配置 `KNOWLEDGE_PROVIDER=dify`、`DIFY_API_KEY` 和 Dataset ID。
+
+## 数据库设计
+
+当前 MySQL 侧包含这些核心表：
+
+- `products`：商品名称、描述和图片地址。
+- `orders`：订单状态、客户账号、商品和物流单号。
+- `tracking_events`：物流轨迹节点。
+- `faq_documents`：已沉淀的 FAQ 知识。
+- `conversations`：会话主表。
+- `messages`：会话消息，外键关联 `conversations`。
+- `tool_calls`：工具调用记录，外键关联 `conversations`。
+- `quality_reviews`：质检记录，可关联会话。
+- `faq_candidates`：客服接待中沉淀出的 FAQ 候选，可关联会话。
+
+Alembic 负责维护表结构迁移。当前迁移已经覆盖会话表和外键关系，启动脚本会先执行迁移，再补齐缺失的基础数据。默认 seed 不会清空已有业务数据。
 
 ## 本地启动
 
-### 1. 安装依赖
+### 1. 安装后端依赖
 
-```bash
+```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install uv
 uv sync
 ```
 
-### 2. 准备 MySQL
+### 2. 安装前端依赖
 
-本地创建数据库和项目专属用户，例如：
-
-```sql
-CREATE DATABASE customer_service CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'customer_service_agent'@'127.0.0.1' IDENTIFIED BY 'change_me';
-GRANT ALL PRIVILEGES ON customer_service.* TO 'customer_service_agent'@'127.0.0.1';
-FLUSH PRIVILEGES;
+```powershell
+cd frontend
+npm install
+cd ..
 ```
 
 ### 3. 配置环境变量
 
 复制模板：
 
-```bash
-cp .env.local.example .env.local
+```powershell
+Copy-Item .env.local.example .env.local
 ```
 
-本地运行常用配置：
+本地 MySQL 推荐配置：
 
 ```env
 MOCK_MODE=False
@@ -145,10 +142,20 @@ KNOWLEDGE_PROVIDER=mysql
 BUSINESS_DATA_PROVIDER=mysql
 ```
 
+如果要接真实大模型，需要把 `.env.local` 中对应厂商的 API Key 和模型名改成有效值。仓库里的示例值只是占位符。
+
 ### 4. 启动工作台
 
-```bash
+```powershell
 .\start_workbench.ps1
+```
+
+启动脚本会执行数据库迁移，并在商品、订单、物流或 FAQ 初始表为空时补齐基础数据。默认不会清空已有业务数据。
+
+需要重置基础数据时，可以手动执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.seed_mysql_data --reset
 ```
 
 前端工作台：
@@ -163,54 +170,39 @@ http://127.0.0.1:5173
 http://127.0.0.1:8080/ready
 ```
 
-## 常用验证
+## API 文档
 
-后端测试：
+常用接口：
 
-```bash
-.\.venv\Scripts\python.exe -m pytest
-```
+- `GET /ready`：服务就绪检查。
+- `GET /api/products`：商品列表。
+- `POST /api/chat`：工作台对话。
+- `GET /api/conversations`：会话列表。
+- `GET /api/conversations/{conversation_id}`：会话详情。
+- `GET /api/conversations/{conversation_id}/tool-calls`：工具调用轨迹。
 
-前端构建：
-
-```bash
-cd frontend
-npm run build
-```
-
-数据库迁移：
-
-```bash
-.\.venv\Scripts\alembic.exe upgrade head
-```
-
-## 接口说明
-
-常用业务接口：
-
-- `GET /ready`：检查服务和数据库是否可用
-- `GET /api/products`：获取商品货架
-- `POST /api/chat`：发送客服消息
-- `GET /api/conversations`：查看历史会话
-- `GET /api/conversations/{conversation_id}`：查看会话详情
-- `POST /api/quality-check`：执行质检
-- `POST /api/summary`：生成会话总结
-- `POST /api/faqs`：保存 FAQ
-
-更完整的请求示例见 [API.md](API.md)。
-
-## 当前状态
-
-- MySQL 已接入为默认业务数据源
-- Alembic 迁移已覆盖会话表和外键关系
-- seed 脚本默认不覆盖已有数据
-- 前端工作台已完成桌面端和移动端适配
-- 后端测试覆盖核心接口、会话存储、业务工具、RAG、质检和模型适配
-- 本地验证通过：`44 passed`，前端 `npm run build` 通过
+更多接口说明见 [API.md](API.md)。
 
 ## 知识库文件
 
-- `docs/dify_product_service_knowledge.md`
-- `docs/dify_faq_knowledge.md`
+项目提供两份可导入 Dify 的知识库文档：
 
-这两个文件可以导入 Dify，分别用于商品知识和 FAQ 知识。
+- [docs/dify_product_service_knowledge.md](docs/dify_product_service_knowledge.md)
+- [docs/dify_faq_knowledge.md](docs/dify_faq_knowledge.md)
+
+## 验证状态
+
+当前已验证：
+
+- 前端 `npm run build` 可以完成生产构建。
+- 后端测试通过：`44 passed`。
+- 后端健康检查接口可用。
+- 商品列表和会话列表接口可用。
+- MySQL 迁移已到 `0003_conversation_foreign_keys`。
+- MySQL 启动数据脚本支持非破坏式补齐和手动重置。
+
+需要注意：真实 AI 对话依赖有效的模型 API Key、模型名和知识库配置。使用占位环境变量时，`/api/chat` 可能返回模型配置错误，这是预期的配置问题，不是前端或数据库启动问题。
+
+## 部署说明
+
+项目以本地 MySQL + 本地前后端启动为默认方式。仓库中保留了 Dockerfile 和 docker-compose 配置，方便后续容器化部署；当前日常开发和演示不依赖 Docker。
