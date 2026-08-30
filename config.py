@@ -16,6 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 ak = os.getenv("VOLC_ACCESSKEY", "")
 sk = os.getenv("VOLC_SECRETKEY", "")
+ark_api_key = os.getenv("ARK_API_KEY", "")
 collection_name = os.getenv("COLLECTION_NAME", "")
 faq_collection_name = os.getenv("FAQ_COLLECTION_NAME", "")
 endpoint_id = os.getenv("LLM_ENDPOINT_ID", "doubao-seed-1-6-250615")

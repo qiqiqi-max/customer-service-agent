@@ -12,7 +12,7 @@
 import inspect
 from typing import AsyncIterable, Callable, List
 
-from config import use_server_auth
+from config import ark_api_key, use_server_auth
 from fastapi import HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from volcenginesdkarkruntime._exceptions import ArkAPIError
@@ -29,7 +29,9 @@ def get_auth_header() -> dict:
     headers = get_headers()
     if use_server_auth:
         return {}
-    return {"Authorization": headers.get("Authorization", "-")}
+    return {"Authorization": f"Bearer {ark_api_key}"} if ark_api_key else {
+        "Authorization": headers.get("Authorization", "-")
+    }
 
 
 def get_handler(

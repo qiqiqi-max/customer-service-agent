@@ -8,6 +8,7 @@ import type {
   ProductListResponse,
   QualityResponse,
   SummaryResponse
+  , ToolCallRecord, QualityReviewRecord, FAQCandidateRecord
 } from "../types";
 
 type RequestOptions = {
@@ -67,9 +68,9 @@ export const api = {
   health: () => request<HealthResponse>("/health"),
   ready: () => request<HealthResponse>("/ready"),
   products: () => request<ProductListResponse>("/api/products"),
-  conversations: (accountId: string, limit = 30) =>
+  conversations: (accountId: string, limit = 20, offset = 0) =>
     request<ConversationsResponse>(
-      `/api/conversations?limit=${limit}&account_id=${encodeURIComponent(accountId)}`
+      `/api/conversations?limit=${limit}&offset=${offset}&account_id=${encodeURIComponent(accountId)}`
     ),
   conversation: (conversationId: string, accountId: string) =>
     request<ConversationDetail>(
@@ -78,10 +79,18 @@ export const api = {
       )}`
     ),
   toolCalls: (conversationId: string, accountId: string, limit = 100) =>
-    request<{ conversation_id: string; tool_calls: unknown[] }>(
+    request<{ conversation_id: string; tool_calls: ToolCallRecord[] }>(
       `/api/conversations/${encodeURIComponent(
         conversationId
       )}/tool-calls?account_id=${encodeURIComponent(accountId)}&limit=${limit}`
+    ),
+  qualityReviews: (accountId: string, conversationId?: string | null, limit = 50) =>
+    request<{ reviews: QualityReviewRecord[]; total?: number }>(
+      `/api/quality-reviews?account_id=${encodeURIComponent(accountId)}${conversationId ? `&conversation_id=${encodeURIComponent(conversationId)}` : ""}&limit=${limit}`
+    ),
+  faqCandidates: (accountId: string, limit = 50) =>
+    request<{ candidates: FAQCandidateRecord[]; total?: number }>(
+      `/api/faq-candidates?account_id=${encodeURIComponent(accountId)}&limit=${limit}`
     ),
   chat: (input: {
     message: string;

@@ -87,6 +87,10 @@ export type FAQResponse = {
   message?: string;
 };
 
+export type ToolCallRecord = { id?: number; tool_name?: string; input_json?: unknown; output_json?: unknown; created_at?: number };
+export type QualityReviewRecord = { id?: number; conversation_id?: string; content?: string; result?: string; structured_result?: QualityStructuredResult; created_at?: number };
+export type FAQCandidateRecord = { id?: number; question?: string; answer?: string; score?: number; status?: string; created_at?: number };
+
 export type HealthResponse = {
   status?: string;
   service?: string;

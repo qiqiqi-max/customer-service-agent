@@ -25,6 +25,8 @@ import type {
   ChatMessage,
   ConversationSummary,
   ExecutionRecord,
+  FAQCandidateRecord,
+  QualityReviewRecord,
   Product,
   ResultCard,
   ScenarioPreset
@@ -58,6 +60,9 @@ export function App() {
     new Set(SCENARIOS[0].functions)
   );
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [conversationPage, setConversationPage] = useState(1);
+  const [conversationPageSize, setConversationPageSize] = useState(20);
+  const [conversationTotal, setConversationTotal] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "system",
@@ -75,6 +80,8 @@ export function App() {
   const [qualityKeywords, setQualityKeywords] = useState("夸大承诺、绝对化用语、服务态度");
   const [faqScore, setFaqScore] = useState(5);
   const [notice, setNotice] = useState<string | null>(null);
+  const [qualityReviews, setQualityReviews] = useState<QualityReviewRecord[]>([]);
+  const [faqCandidates, setFaqCandidates] = useState<FAQCandidateRecord[]>([]);
 
   const activeScenario = useMemo(
     () => SCENARIOS.find((item) => item.id === activeScenarioId) ?? SCENARIOS[0],
@@ -99,8 +106,12 @@ export function App() {
   useEffect(() => {
     refreshHealth();
     loadProducts();
-    loadConversations(accountId);
+    loadConversations(accountId, 1, conversationPageSize);
   }, []);
+
+  useEffect(() => {
+    if (activeView === "quality") void loadQualityHistory();
+  }, [activeView, accountId, conversationId]);
 
   async function refreshHealth() {
     setHealth("checking");
@@ -122,10 +133,12 @@ export function App() {
     }
   }
 
-  async function loadConversations(nextAccountId = accountId) {
+  async function loadConversations(nextAccountId = accountId, page = conversationPage, pageSize = conversationPageSize) {
     try {
-      const payload = await api.conversations(nextAccountId);
+      const payload = await api.conversations(nextAccountId, pageSize, (page - 1) * pageSize);
       setConversations(payload.conversations ?? []);
+      setConversationPage(page);
+      setConversationTotal(payload.total ?? 0);
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "历史会话加载失败");
     }
@@ -145,8 +158,29 @@ export function App() {
       const insights = collectInsights(payload.messages ?? []);
       setExecutionRecords(insights.executions);
       setResultCards(insights.results);
+      const toolPayload = await api.toolCalls(id, accountId);
+      setExecutionRecords((toolPayload.tool_calls ?? []).map((item, index) => ({
+        id: String(item.id ?? index),
+        action: "历史工具调用",
+        tool: item.tool_name ?? "未命名工具",
+        input: item.input_json,
+        output: item.output_json
+      })));
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "会话载入失败");
+    }
+  }
+
+  async function loadQualityHistory() {
+    try {
+      const [reviews, candidates] = await Promise.all([
+        api.qualityReviews(accountId, conversationId),
+        api.faqCandidates(accountId)
+      ]);
+      setQualityReviews(reviews.reviews ?? []);
+      setFaqCandidates(candidates.candidates ?? []);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "复盘记录加载失败");
     }
   }
 
@@ -233,8 +267,18 @@ export function App() {
 
   async function handleSummary() {
     try {
+      const summaryMessages = messages.filter(
+        (item) => item.role === "user" || item.role === "assistant"
+      );
+      if (
+        !summaryMessages.some((item) => item.role === "user") ||
+        !summaryMessages.some((item) => item.role === "assistant")
+      ) {
+        setSummary("请先完成一轮客户提问和客服回复，再生成会话总结。");
+        return;
+      }
       setSummary("正在生成会话总结...");
-      const payload = await api.summary(messages.filter((item) => item.role !== "system"));
+      const payload = await api.summary(summaryMessages);
       setSummary(payload.summary || "暂无可总结内容。");
     } catch (error) {
       setSummary(`生成失败：${error instanceof Error ? error.message : "未知错误"}`);
@@ -243,8 +287,11 @@ export function App() {
 
   async function handleQuality() {
     try {
-      setQuality("正在检查最新回复...");
-      const content = latestAssistantMessage?.content || messages.map((item) => item.content).join("\n");
+      setQuality("正在检查当前会话的完整对话...");
+      const content = messages
+        .filter((item) => item.role === "user" || item.role === "assistant")
+        .map((item) => `${item.role}: ${item.content}`)
+        .join("\n");
       const payload = await api.quality(
         content,
         qualityKeywords,
@@ -409,7 +456,12 @@ export function App() {
             accountId={accountId}
             conversations={conversations}
             onOpenConversation={openConversation}
-            onRefresh={() => loadConversations(accountId)}
+            onRefresh={() => loadConversations(accountId, conversationPage, conversationPageSize)}
+            page={conversationPage}
+            pageSize={conversationPageSize}
+            total={conversationTotal}
+            onPage={(page) => loadConversations(accountId, page, conversationPageSize)}
+            onPageSize={(pageSize) => loadConversations(accountId, 1, pageSize)}
           />
         )}
 
@@ -435,6 +487,8 @@ export function App() {
             onQuality={handleQuality}
             onSaveFaq={handleSaveFaq}
             onSummary={handleSummary}
+            qualityReviews={qualityReviews}
+            faqCandidates={faqCandidates}
           />
         )}
 
@@ -465,6 +519,8 @@ function DeskView(props: {
   onToggleFunction: (key: string) => void;
   onToggleProduct: (name: string) => void;
 }) {
+  const [contextTab, setContextTab] = useState<"overview" | "products" | "trace" | "results">("overview");
+
   return (
     <section className="desk-layout">
       <aside className="left-rail">
@@ -565,22 +621,6 @@ function DeskView(props: {
               </div>
             </article>
           ))}
-          {props.messages.length <= 1 && (
-            <div className="empty-workflow">
-              <div>
-                <strong>1. 选择场景</strong>
-                <span>售前、订单、物流、售后会自动匹配不同工具。</span>
-              </div>
-              <div>
-                <strong>2. 输入问题</strong>
-                <span>也可以直接点击上方快捷话术开始测试。</span>
-              </div>
-              <div>
-                <strong>3. 复盘沉淀</strong>
-                <span>工具轨迹、结果卡片和 FAQ 会保留在右侧。</span>
-              </div>
-            </div>
-          )}
         </div>
 
         <form className="composer" id="composer-form" onSubmit={props.onSend}>
@@ -600,34 +640,61 @@ function DeskView(props: {
       </section>
 
       <aside className="right-rail">
-        <CustomerPanel
-          executionRecords={props.executionRecords}
-          messages={props.messages}
-          resultCards={props.resultCards}
-          selectedProducts={props.selectedProducts}
-        />
-        <section className="surface compact">
+        <section className="surface context-panel">
           <div className="section-head">
             <div>
-              <span className="eyebrow">商品范围</span>
-              <h2>本轮货架</h2>
+              <span className="eyebrow">辅助信息</span>
+              <h2>工作上下文</h2>
             </div>
-            <span className="count-badge">{props.selectedProducts.size}</span>
           </div>
-          <div className="product-mini-list">
-            {props.products.length ? (
-              props.products.slice(0, 8).map((product) => (
-                <label key={product.name} className="product-mini">
-                  <input
-                    checked={props.selectedProducts.has(product.name)}
-                    onChange={() => props.onToggleProduct(product.name)}
-                    type="checkbox"
-                  />
-                  <span>{product.name}</span>
-                </label>
-              ))
-            ) : (
-              <p className="empty">商品数据暂未载入。</p>
+          <div className="context-tabs" role="tablist" aria-label="工作上下文">
+            {([
+              ["overview", "概况"],
+              ["products", `货架 ${props.products.length}`],
+              ["trace", `工具 ${props.executionRecords.length}`],
+              ["results", `结果 ${props.resultCards.length}`],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                className={contextTab === value ? "context-tab is-active" : "context-tab"}
+                onClick={() => setContextTab(value)}
+                role="tab"
+                aria-selected={contextTab === value}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="context-content">
+            {contextTab === "overview" && (
+              <CustomerPanel
+                executionRecords={props.executionRecords}
+                messages={props.messages}
+                resultCards={props.resultCards}
+                selectedProducts={props.selectedProducts}
+                compact
+              />
+            )}
+            {contextTab === "products" && (
+              <div className="product-mini-list">
+                {props.products.length ? props.products.map((product) => (
+                  <label key={product.name} className="product-mini">
+                    <input
+                      checked={props.selectedProducts.has(product.name)}
+                      onChange={() => props.onToggleProduct(product.name)}
+                      type="checkbox"
+                    />
+                    <span>{product.name}</span>
+                  </label>
+                )) : <p className="empty">商品数据暂未载入。</p>}
+              </div>
+            )}
+            {contextTab === "trace" && (
+              <TraceList records={props.executionRecords} />
+            )}
+            {contextTab === "results" && (
+              <ResultList cards={props.resultCards} />
             )}
           </div>
         </section>
@@ -641,10 +708,11 @@ function CustomerPanel(props: {
   messages: ChatMessage[];
   resultCards: ResultCard[];
   selectedProducts: Set<string>;
+  compact?: boolean;
 }) {
   const latestUser = [...props.messages].reverse().find((item) => item.role === "user");
   return (
-    <section className="surface">
+    <section className={props.compact ? "context-inner" : "surface"}>
       <div className="section-head">
         <div>
           <span className="eyebrow">客户档案</span>
@@ -695,12 +763,48 @@ function CustomerPanel(props: {
   );
 }
 
+function TraceList({ records }: { records: ExecutionRecord[] }) {
+  return records.length ? (
+    <div className="trace-list">
+      {records.map((item) => (
+        <article key={item.id} className="trace-item">
+          <strong>{item.tool}</strong>
+          <span>{item.action}</span>
+          <pre>{formatValue(item.output)}</pre>
+        </article>
+      ))}
+    </div>
+  ) : <p className="empty">暂无工具调用。</p>;
+}
+
+function ResultList({ cards }: { cards: ResultCard[] }) {
+  return cards.length ? (
+    <div className="result-list">
+      {cards.map((card) => (
+        <article key={card.id} className="result-card">
+          <strong>{card.title}</strong>
+          <span>{card.type}</span>
+          {card.fields.slice(0, 4).map((field) => (
+            <p key={field.label}><b>{field.label}</b>{field.value}</p>
+          ))}
+        </article>
+      ))}
+    </div>
+  ) : <p className="empty">暂无工单结果。</p>;
+}
+
 function HistoryView(props: {
   accountId: string;
   conversations: ConversationSummary[];
   onOpenConversation: (id: string) => void;
   onRefresh: () => void;
+  page: number;
+  pageSize: number;
+  total: number;
+  onPage: (page: number) => void;
+  onPageSize: (pageSize: number) => void;
 }) {
+  const pageCount = Math.max(1, Math.ceil(props.total / props.pageSize));
   return (
     <section className="page-grid single">
       <div className="surface">
@@ -727,6 +831,18 @@ function HistoryView(props: {
           ) : (
             <p className="empty">这个账号还没有历史会话。</p>
           )}
+        </div>
+        <div className="pagination-bar">
+          <span>共 {props.total} 条，第 {props.page} / {pageCount} 页</span>
+          <label>
+            每页
+            <select value={props.pageSize} onChange={(event) => props.onPageSize(Number(event.target.value))}>
+              <option value={20}>20 条</option>
+              <option value={50}>50 条</option>
+            </select>
+          </label>
+          <button className="secondary-button" disabled={props.page <= 1} onClick={() => props.onPage(props.page - 1)} type="button">上一页</button>
+          <button className="secondary-button" disabled={props.page >= pageCount} onClick={() => props.onPage(props.page + 1)} type="button">下一页</button>
         </div>
       </div>
     </section>
@@ -805,6 +921,8 @@ function QualityView(props: {
   onQuality: () => void;
   onSaveFaq: () => void;
   onSummary: () => void;
+  qualityReviews: QualityReviewRecord[];
+  faqCandidates: FAQCandidateRecord[];
 }) {
   return (
     <section className="page-grid">
@@ -853,15 +971,42 @@ function QualityView(props: {
         </div>
         <label className="field">
           <span>满意度评分：{props.faqScore}</span>
-          <input
-            max={5}
-            min={1}
-            onChange={(event) => props.onFaqScore(Number(event.target.value))}
-            type="range"
-            value={props.faqScore}
-          />
+          <div className="score-options" role="radiogroup" aria-label="满意度评分">
+            {[1, 2, 3, 4, 5].map((score) => (
+              <button
+                aria-checked={props.faqScore === score}
+                className={props.faqScore === score ? "score-option is-selected" : "score-option"}
+                key={score}
+                onClick={() => props.onFaqScore(score)}
+                role="radio"
+                type="button"
+              >
+                {score}
+              </button>
+            ))}
+          </div>
         </label>
         <pre className="output-box">{props.faqResult}</pre>
+      </div>
+
+      <div className="surface ops wide">
+        <div className="section-head"><div><span className="eyebrow">历史记录</span><h2>最近质检</h2></div></div>
+        {props.qualityReviews.length ? props.qualityReviews.slice(0, 8).map((item) => (
+          <div className="record-row" key={item.id}>
+            <strong>{item.structured_result?.risk_level ?? "未评级"}</strong>
+            <span>{item.result || item.content || "无内容"}</span>
+          </div>
+        )) : <p className="muted">暂无历史质检记录</p>}
+      </div>
+
+      <div className="surface ops wide">
+        <div className="section-head"><div><span className="eyebrow">知识审核</span><h2>FAQ 候选</h2></div></div>
+        {props.faqCandidates.length ? props.faqCandidates.slice(0, 8).map((item) => (
+          <div className="record-row" key={item.id}>
+            <strong>{item.status ?? "待处理"}</strong>
+            <span>{item.question || "未命名问题"}</span>
+          </div>
+        )) : <p className="muted">暂无 FAQ 候选</p>}
       </div>
     </section>
   );

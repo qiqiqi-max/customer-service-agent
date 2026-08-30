@@ -3,7 +3,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import case, desc, insert, select, update
+from sqlalchemy import case, desc, func, insert, select, update
 
 import config
 from arkitect.types.llm.model import ArkChatRequest, ArkChatResponse
@@ -110,7 +110,7 @@ def attach_conversation_metadata(
     return response
 
 
-def list_conversations(limit: int = 50, account_id: str | None = None) -> dict:
+def list_conversations(limit: int = 50, account_id: str | None = None, offset: int = 0) -> dict:
     init_db()
     last_message = (
         select(messages.c.content)
@@ -128,15 +128,20 @@ def list_conversations(limit: int = 50, account_id: str | None = None) -> dict:
             conversations.c.updated_at,
             last_message.label("last_message"),
         )
-        .order_by(desc(conversations.c.updated_at))
+        .order_by(desc(conversations.c.updated_at), desc(conversations.c.id))
+        .offset(max(offset, 0))
         .limit(limit)
     )
     if account_id:
         query = query.where(conversations.c.account_id == account_id)
 
+    count_query = select(func.count()).select_from(conversations)
+    if account_id:
+        count_query = count_query.where(conversations.c.account_id == account_id)
     with get_engine().connect() as conn:
         rows = conn.execute(query).mappings().all()
-    return {"conversations": [dict(row) for row in rows], "total": len(rows)}
+        total = conn.execute(count_query).scalar_one()
+    return {"conversations": [dict(row) for row in rows], "total": int(total)}
 
 
 def get_conversation(

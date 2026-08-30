@@ -246,6 +246,10 @@ class TestBusinessAPI(unittest.IsolatedAsyncioTestCase):
                             role="user",
                             content="I want to return this order.",
                         )
+                        ,main.BusinessChatMessage(
+                            role="assistant",
+                            content="I can help check the return policy.",
+                        )
                     ],
                     model="test",
                 )

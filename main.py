@@ -384,8 +384,8 @@ async def workbench_page():
     return FileResponse(WEBUI_DIR / "index.html")
 
 
-async def conversations(limit: int = 50, account_id: Optional[str] = None):
-    return list_conversations(limit=limit, account_id=account_id)
+async def conversations(limit: int = 20, offset: int = 0, account_id: Optional[str] = None):
+    return list_conversations(limit=limit, offset=offset, account_id=account_id)
 
 
 async def conversation_detail(
@@ -505,6 +505,23 @@ async def api_chat(chat: BusinessChatRequest):
 
 
 async def api_save_faq(faq: FAQRequest):
+    if faq.conversation_id:
+        conversation = get_conversation(faq.conversation_id, account_id=faq.account_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        history = [
+            message for message in conversation.get("messages", [])
+            if message.get("role") in {"user", "assistant"}
+        ]
+        if len(history) >= 2:
+            faq.question = next(
+                (item["content"] for item in reversed(history[:-1]) if item["role"] == "user"),
+                faq.question,
+            )
+            faq.answer = next(
+                (item["content"] for item in reversed(history) if item["role"] == "assistant"),
+                faq.answer,
+            )
     result = await save_faq(faq)
     save_faq_candidate(
         account_id=faq.account_id,
@@ -517,11 +534,36 @@ async def api_save_faq(faq: FAQRequest):
 
 
 async def api_quality_check(payload: QualityCheckRequest):
-    structured_result = inspect_quality_text(payload.content, payload.keywords)
+    review_content = payload.content
+    if payload.conversation_id:
+        conversation = get_conversation(payload.conversation_id, account_id=payload.account_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        conversation_lines = [
+            f"{message['role']}: {message['content']}"
+            for message in conversation.get("messages", [])
+            if message.get("role") in {"user", "assistant"}
+        ]
+        if conversation_lines:
+            review_content = "\n".join(conversation_lines)
+
+    valid_messages = [
+        message for message in review_content.splitlines()
+        if message.strip()
+    ]
+    if not any(line.lower().startswith("user:") for line in valid_messages) or not any(
+        line.lower().startswith("assistant:") for line in valid_messages
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="当前会话尚未形成完整的客户提问和客服回复，暂不支持质检。",
+        )
+
+    structured_result = inspect_quality_text(review_content, payload.keywords)
     content = (
-        f"【客服会话】\n{payload.content}\n\n【质检关键词】\n{payload.keywords}"
+        f"【客服会话】\n{review_content}\n\n【质检关键词】\n{payload.keywords}"
         if payload.keywords
-        else f"【客服会话】\n{payload.content}"
+        else f"【客服会话】\n{review_content}"
     )
     request = ArkChatRequest(
         stream=False,
@@ -533,7 +575,7 @@ async def api_quality_check(payload: QualityCheckRequest):
     save_quality_review(
         account_id=payload.account_id,
         conversation_id=payload.conversation_id,
-        content=payload.content,
+        content=review_content,
         keywords=payload.keywords,
         result=result_text,
         structured_result=structured_result,
@@ -547,12 +589,22 @@ async def api_quality_check(payload: QualityCheckRequest):
 
 
 async def api_summary(payload: SummaryRequest):
+    valid_messages = [
+        message for message in payload.messages if message.role in {"user", "assistant"}
+    ]
+    user_count = sum(message.role == "user" for message in valid_messages)
+    assistant_count = sum(message.role == "assistant" for message in valid_messages)
+    if user_count == 0 or assistant_count == 0 or min(user_count, assistant_count) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="至少完成一轮客户提问和客服回复后才能生成会话总结。",
+        )
     request = ArkChatRequest(
         stream=False,
         model=payload.model,
         messages=[
             ArkMessage(role=message.role, content=message.content)
-            for message in payload.messages
+            for message in valid_messages
         ],
     )
     response = await _collect_first_response(summary_chat, request)
