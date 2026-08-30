@@ -547,17 +547,18 @@ async def api_quality_check(payload: QualityCheckRequest):
         if conversation_lines:
             review_content = "\n".join(conversation_lines)
 
-    valid_messages = [
-        message for message in review_content.splitlines()
-        if message.strip()
-    ]
-    if not any(line.lower().startswith("user:") for line in valid_messages) or not any(
-        line.lower().startswith("assistant:") for line in valid_messages
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="当前会话尚未形成完整的客户提问和客服回复，暂不支持质检。",
-        )
+    if payload.conversation_id:
+        valid_messages = [
+            message for message in review_content.splitlines()
+            if message.strip()
+        ]
+        if not any(line.lower().startswith("user:") for line in valid_messages) or not any(
+            line.lower().startswith("assistant:") for line in valid_messages
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="当前会话尚未形成完整的客户提问和客服回复，暂不支持质检。",
+            )
 
     structured_result = inspect_quality_text(review_content, payload.keywords)
     content = (
