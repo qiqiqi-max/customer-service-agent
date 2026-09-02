@@ -52,6 +52,28 @@ orders = Table(
     Column("updated_at", BigInteger, nullable=False, index=True),
 )
 
+refund_requests = Table(
+    "refund_requests",
+    metadata,
+    Column("id", String(100), primary_key=True),
+    Column("account_id", String(100), nullable=False, index=True),
+    Column(
+        "order_id",
+        String(100),
+        ForeignKey("orders.order_id"),
+        nullable=False,
+        index=True,
+    ),
+    Column("reason", Text, nullable=False),
+    Column("status", String(32), nullable=False, index=True),
+    Column("created_at", BigInteger, nullable=False),
+    Column("updated_at", BigInteger, nullable=False, index=True),
+    Column("approved_at", BigInteger, nullable=True),
+    Column("executed_at", BigInteger, nullable=True),
+    Column("rejected_at", BigInteger, nullable=True),
+    Column("failure_reason", Text, nullable=True),
+)
+
 tracking_events = Table(
     "tracking_events",
     metadata,

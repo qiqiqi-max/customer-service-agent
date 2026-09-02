@@ -7,6 +7,7 @@ from business_services import (
     get_business_service,
     reset_business_service,
 )
+from data.refunds import RefundError, RefundStatus
 
 
 class TestLocalDatabaseBusinessDataService(unittest.IsolatedAsyncioTestCase):
@@ -15,7 +16,7 @@ class TestLocalDatabaseBusinessDataService(unittest.IsolatedAsyncioTestCase):
         self.service = LocalDatabaseBusinessDataService()
         self.account_id = f"svc_{uuid4().hex}"
 
-    async def test_order_tracking_and_refund_flow(self):
+    async def test_refund_requires_manual_approval_before_execution(self):
         orders = await self.service.get_all_orders(self.account_id)
         shipped_order = next(item for item in orders if item.get("tracking_number"))
 
@@ -32,17 +33,52 @@ class TestLocalDatabaseBusinessDataService(unittest.IsolatedAsyncioTestCase):
             self.account_id,
             shipped_order["order_id"],
         )
-        duplicate_refund = await self.service.refund_order(
+        self.assertEqual(refund["status"], RefundStatus.PENDING_APPROVAL.value)
+        self.assertEqual(refunded_order["status"], shipped_order["status"])
+        with self.assertRaises(RefundError):
+            await self.service.execute_refund(self.account_id, refund["id"])
+
+        approved = await self.service.approve_refund(self.account_id, refund["id"])
+        self.assertEqual(approved["status"], RefundStatus.APPROVED.value)
+        executed = await self.service.execute_refund(self.account_id, refund["id"])
+        self.assertEqual(executed["status"], RefundStatus.EXECUTED.value)
+        refunded_order = await self.service.get_order(
             self.account_id,
             shipped_order["order_id"],
-            "second request",
         )
+        self.assertEqual(refunded_order["status"], "已退款")
+        self.assertEqual(refunded_order["reason"], "customer request")
 
         self.assertEqual(len(orders), 3)
         self.assertEqual(tracking["tracking_number"], shipped_order["tracking_number"])
-        self.assertEqual(refund, "Refund successful")
-        self.assertEqual(refunded_order["reason"], "customer request")
-        self.assertIn("already been refunded", duplicate_refund)
+        with self.assertRaises(RefundError):
+            await self.service.refund_order(
+                self.account_id,
+                shipped_order["order_id"],
+                "second request",
+            )
+
+    async def test_rejected_refund_cannot_be_executed(self):
+        orders = await self.service.get_all_orders(self.account_id)
+        request = await self.service.refund_order(
+            self.account_id,
+            orders[0]["order_id"],
+            "customer changed mind",
+        )
+        rejected = await self.service.reject_refund(self.account_id, request["id"])
+        self.assertEqual(rejected["status"], RefundStatus.REJECTED.value)
+        with self.assertRaises(RefundError):
+            await self.service.execute_refund(self.account_id, request["id"])
+
+    async def test_refund_requests_are_account_isolated(self):
+        orders = await self.service.get_all_orders(self.account_id)
+        request = await self.service.refund_order(
+            self.account_id,
+            orders[0]["order_id"],
+            "account isolation",
+        )
+        with self.assertRaises(RefundError):
+            await self.service.approve_refund("another_account", request["id"])
 
     async def test_pending_order_has_no_tracking(self):
         orders = await self.service.get_all_orders(self.account_id)

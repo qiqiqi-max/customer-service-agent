@@ -1063,6 +1063,49 @@ pre {
   font-size: 12px;
 }
 
+.refund-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber) !important;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.refund-status.is-approved {
+  background: var(--blue-soft);
+  color: var(--blue) !important;
+}
+
+.refund-status.is-executed {
+  background: var(--primary-soft);
+  color: var(--primary-strong) !important;
+}
+
+.refund-status.is-rejected,
+.refund-status.is-failed {
+  background: var(--danger-soft);
+  color: var(--danger) !important;
+}
+
+.refund-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.refund-actions .primary-button,
+.refund-actions .secondary-button {
+  min-height: 32px;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
 .result-card b {
   color: var(--muted);
 }

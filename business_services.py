@@ -9,6 +9,12 @@ from typing import Any
 import config
 from data import orders, tracking
 from data.orders import OrderStatus
+from data.refunds import (
+    approve_refund,
+    create_refund_request,
+    execute_refund,
+    reject_refund,
+)
 from observability import elapsed_ms, log_event, monotonic
 
 
@@ -40,6 +46,18 @@ class BusinessDataService(ABC):
 
     @abstractmethod
     async def refund_order(self, account_id: str, order_id: str, reason: str = "") -> Any:
+        pass
+
+    @abstractmethod
+    async def approve_refund(self, account_id: str, refund_id: str) -> Any:
+        pass
+
+    @abstractmethod
+    async def execute_refund(self, account_id: str, refund_id: str) -> Any:
+        pass
+
+    @abstractmethod
+    async def reject_refund(self, account_id: str, refund_id: str) -> Any:
         pass
 
 
@@ -105,24 +123,18 @@ class LocalDatabaseBusinessDataService(BusinessDataService):
 
     async def refund_order(self, account_id: str, order_id: str, reason: str = "") -> Any:
         started = monotonic()
-        order = await orders.get_order(account_id, order_id)
-        if not order:
-            result = "Order does not exist"
-            _log_business_call("refund_order", self.provider_name, account_id, started, result)
-            return result
-        if order["status"] == OrderStatus.REFUNDED.value:
-            result = "Order has already been refunded, cannot refund again"
-            _log_business_call("refund_order", self.provider_name, account_id, started, result)
-            return result
-        success = await orders.update_order_status(
-            account_id,
-            order_id,
-            OrderStatus.REFUNDED,
-            reason,
-        )
-        result = "Refund successful" if success else "Refund failed"
+        result = await create_refund_request(account_id, order_id, reason)
         _log_business_call("refund_order", self.provider_name, account_id, started, result)
         return result
+
+    async def approve_refund(self, account_id: str, refund_id: str) -> Any:
+        return await approve_refund(account_id, refund_id)
+
+    async def execute_refund(self, account_id: str, refund_id: str) -> Any:
+        return await execute_refund(account_id, refund_id)
+
+    async def reject_refund(self, account_id: str, refund_id: str) -> Any:
+        return await reject_refund(account_id, refund_id)
 
 
 class MockBusinessDataService(LocalDatabaseBusinessDataService):
@@ -191,6 +203,27 @@ class HttpBusinessDataService(BusinessDataService):
                 "order_id": order_id,
                 "reason": reason,
             },
+        )
+
+    async def approve_refund(self, account_id: str, refund_id: str) -> Any:
+        return await self._request(
+            "POST",
+            f"/refunds/{refund_id}/approve",
+            query={"account_id": account_id},
+        )
+
+    async def execute_refund(self, account_id: str, refund_id: str) -> Any:
+        return await self._request(
+            "POST",
+            f"/refunds/{refund_id}/execute",
+            query={"account_id": account_id},
+        )
+
+    async def reject_refund(self, account_id: str, refund_id: str) -> Any:
+        return await self._request(
+            "POST",
+            f"/refunds/{refund_id}/reject",
+            query={"account_id": account_id},
         )
 
     async def _request(

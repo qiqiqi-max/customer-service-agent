@@ -7,6 +7,7 @@ import type {
   HealthResponse,
   ProductListResponse,
   QualityResponse,
+  RefundRecord,
   SummaryResponse
   , ToolCallRecord, QualityReviewRecord, FAQCandidateRecord
 } from "../types";
@@ -152,5 +153,10 @@ export const api = {
         account_id: input.accountId,
         conversation_id: input.conversationId || undefined
       }
+    })
+  ,refundAction: (refundId: string, action: "approve" | "reject" | "execute", accountId: string) =>
+    request<RefundRecord>(`/api/refunds/${encodeURIComponent(refundId)}/${action}`, {
+      method: "POST",
+      body: { account_id: accountId }
     })
 };

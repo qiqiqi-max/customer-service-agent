@@ -5,9 +5,9 @@
 ![React](https://img.shields.io/badge/React%20%2B%20Vite-Workbench-3b82f6?style=flat-square&logo=react&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-Persistence-4479A1?style=flat-square&logo=mysql&logoColor=white)
 
-面向电商售后场景的智能客服 Agent 工作台。项目把接待对话、知识库检索、订单/物流/退款工具、会话留痕、质检复盘和 FAQ 沉淀放在同一套流程里，适合做本地演示、简历项目展示，也可以继续扩展到真实业务系统。
+面向电商售后场景的智能客服 Agent 工作台。项目把接待对话、知识库检索、订单/物流工具、退款审批、会话留痕、质检复盘和 FAQ 沉淀放在同一套流程里，解决客服回复依赖人工查询、操作不可追溯以及高风险售后缺少审核的问题。
 
-当前版本已经从早期演示页升级为工作台结构：左侧管理场景、能力开关和最近会话，中间处理客服会话，右侧通过上下文面板切换客户概况、商品货架、工具轨迹和业务结果。业务数据默认走 MySQL，Dify 可作为外部知识库来源，模型层支持 DeepSeek、智谱、火山引擎和 OpenAI Compatible 接口。
+当前版本已经从早期演示页升级为工作台结构：左侧管理场景、能力开关和最近会话，中间处理客服会话，右侧通过上下文面板切换客户概况、商品货架、工具轨迹和业务结果。业务数据默认走 MySQL，Dify 可作为外部知识库来源，模型层支持 DeepSeek、智谱、火山引擎和 OpenAI Compatible 接口。退款由 Agent 发起申请，人工确认后才允许执行。
 
 ## 项目截图
 
@@ -23,7 +23,8 @@
 
 - 接待工作台：提供客服对话、商品范围选择、流式回复开关和接待上下文展示。
 - 知识问答：支持本地 FAQ/MySQL 知识数据，也预留 Dify Dataset 检索入口。
-- 业务工具：封装订单查询、物流查询、退款处理等售后能力。
+- 业务工具：封装订单查询、物流查询和退款申请等售后能力。
+- 退款审批：退款申请先进入 `pending_approval`，经人工批准后才允许执行，避免 Agent 直接改动订单状态。
 - 会话持久化：保存会话、消息、工具调用记录，便于追踪一次回复的来源。
 - 质检复盘：按会话读取完整的多轮客户与客服消息，结合规则配置检查漏答、风险话术和工具使用情况，并保存质检结果。
 - FAQ 沉淀：将高质量问答保存为候选 FAQ，用于后续知识库维护。
@@ -84,6 +85,20 @@ customer-service-agent/
 6. 质检或总结前校验会话是否形成有效问答，避免对空会话或单边消息生成虚假结论。
 7. 前端展示回复内容、客户信息、工具轨迹和可复盘记录。
 
+### 退款流程
+
+退款采用独立申请状态机，不把“申请成功”误认为“退款完成”：
+
+```text
+客户确认订单
+    -> Agent 创建退款申请（pending_approval）
+    -> 人工批准（approved）
+    -> 执行退款（executed）
+    -> 订单状态更新为“已退款”
+```
+
+如果人工拒绝，申请进入 `rejected`，订单保持原状态；如果执行前未完成人工批准，接口会拒绝执行。执行过程出现业务错误时，应保留失败原因并进入人工处理流程。
+
 ## MySQL 与 Dify 分工
 
 - MySQL：保存结构化业务数据，包括商品、订单、物流、会话、消息、工具调用、质检记录和 FAQ 候选。
@@ -96,6 +111,7 @@ customer-service-agent/
 
 - `products`：商品名称、描述和图片地址。
 - `orders`：订单状态、客户账号、商品和物流单号。
+- `refund_requests`：退款申请、审批状态、执行时间和失败原因。
 - `tracking_events`：物流轨迹节点。
 - `faq_documents`：已沉淀的 FAQ 知识。
 - `conversations`：会话主表。
@@ -104,7 +120,7 @@ customer-service-agent/
 - `quality_reviews`：质检记录，可关联会话。
 - `faq_candidates`：客服接待中沉淀出的 FAQ 候选，可关联会话。
 
-Alembic 负责维护表结构迁移。当前迁移已经覆盖会话表和外键关系，启动脚本会先执行迁移，再补齐缺失的基础数据。默认 seed 不会清空已有业务数据。
+Alembic 负责维护表结构迁移。当前迁移已经覆盖会话表外键和退款申请表，启动脚本会先执行迁移，再补齐缺失的基础数据。默认 seed 不会清空已有业务数据。
 
 ## 本地启动
 
@@ -194,6 +210,10 @@ http://127.0.0.1:8090/ready
 - `GET /api/conversations`：会话列表。
 - `GET /api/conversations/{conversation_id}`：会话详情。
 - `GET /api/conversations/{conversation_id}/tool-calls`：工具调用轨迹。
+- `GET /api/refunds/{refund_id}`：退款申请详情。
+- `POST /api/refunds/{refund_id}/approve`：人工批准退款申请。
+- `POST /api/refunds/{refund_id}/reject`：人工拒绝退款申请。
+- `POST /api/refunds/{refund_id}/execute`：执行已批准的退款。
 
 更多接口说明见 [API.md](API.md)。
 
@@ -213,7 +233,7 @@ http://127.0.0.1:8090/ready
 - 多轮会话质检会拒绝未形成完整客户提问和客服回复的会话。
 - 后端健康检查接口可用。
 - 商品列表和会话列表接口可用。
-- MySQL 迁移已到 `0003_conversation_foreign_keys`。
+- MySQL 迁移已到 `0004_refund_requests`。
 - MySQL 启动数据脚本支持非破坏式补齐和手动重置。
 
 需要注意：真实 AI 对话依赖有效的模型 API Key、模型名和知识库配置。使用占位环境变量时，`/api/chat` 可能返回模型配置错误，这是预期的配置问题，不是前端或数据库启动问题。

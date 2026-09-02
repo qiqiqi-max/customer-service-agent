@@ -29,6 +29,7 @@ import type {
   QualityReviewRecord,
   Product,
   ResultCard,
+  RefundRecord,
   ScenarioPreset
 } from "./types";
 
@@ -330,6 +331,25 @@ export function App() {
     }
   }
 
+  async function handleRefundAction(
+    refundId: string,
+    action: "approve" | "reject" | "execute"
+  ) {
+    try {
+      const payload = await api.refundAction(refundId, action, accountId);
+      setResultCards((current) => current.map((card) => {
+        const raw = card.raw && typeof card.raw === "object" ? card.raw as RefundRecord : null;
+        const cardRefundId = raw?.refund_id || raw?.id;
+        return cardRefundId === refundId
+          ? normalizeResult("order_refund", payload, card.id)
+          : card;
+      }));
+      showNotice(payload.message || "退款状态已更新");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "退款操作失败");
+    }
+  }
+
   function startNewConversation() {
     setConversationId(null);
     setMessages([
@@ -448,6 +468,7 @@ export function App() {
             onSend={handleSend}
             onToggleFunction={toggleFunction}
             onToggleProduct={toggleProduct}
+            onRefundAction={handleRefundAction}
           />
         )}
 
@@ -518,6 +539,7 @@ function DeskView(props: {
   onSend: (event: FormEvent<HTMLFormElement>) => void;
   onToggleFunction: (key: string) => void;
   onToggleProduct: (name: string) => void;
+  onRefundAction: (refundId: string, action: "approve" | "reject" | "execute") => Promise<void>;
 }) {
   const [contextTab, setContextTab] = useState<"overview" | "products" | "trace" | "results">("overview");
 
@@ -694,7 +716,7 @@ function DeskView(props: {
               <TraceList records={props.executionRecords} />
             )}
             {contextTab === "results" && (
-              <ResultList cards={props.resultCards} />
+              <ResultList cards={props.resultCards} onAction={props.onRefundAction} />
             )}
           </div>
         </section>
@@ -777,20 +799,75 @@ function TraceList({ records }: { records: ExecutionRecord[] }) {
   ) : <p className="empty">暂无工具调用。</p>;
 }
 
-function ResultList({ cards }: { cards: ResultCard[] }) {
+function ResultList({
+  cards,
+  onAction
+}: {
+  cards: ResultCard[];
+  onAction: (refundId: string, action: "approve" | "reject" | "execute") => Promise<void>;
+}) {
   return cards.length ? (
     <div className="result-list">
       {cards.map((card) => (
         <article key={card.id} className="result-card">
           <strong>{card.title}</strong>
           <span>{card.type}</span>
+          {card.status && <span className={`refund-status is-${card.status}`}>{refundStatusLabel(card.status)}</span>}
           {card.fields.slice(0, 4).map((field) => (
             <p key={field.label}><b>{field.label}</b>{field.value}</p>
           ))}
+          {card.type === "退款退货" && <RefundActions card={card} onAction={onAction} />}
         </article>
       ))}
     </div>
   ) : <p className="empty">暂无工单结果。</p>;
+}
+
+function RefundActions({
+  card,
+  onAction
+}: {
+  card: ResultCard;
+  onAction: (refundId: string, action: "approve" | "reject" | "execute") => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const raw = card.raw && typeof card.raw === "object" ? card.raw as RefundRecord : null;
+  const refundId = raw?.refund_id || raw?.id;
+  if (!refundId || !card.status || ["executed", "rejected"].includes(card.status)) return null;
+  const resolvedRefundId = refundId;
+
+  async function run(action: "approve" | "reject" | "execute") {
+    setBusy(true);
+    try {
+      await onAction(resolvedRefundId, action);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="refund-actions">
+      {card.status === "pending_approval" && (
+        <>
+          <button className="secondary-button" disabled={busy} onClick={() => run("reject")} type="button">拒绝</button>
+          <button className="primary-button" disabled={busy} onClick={() => run("approve")} type="button">批准退款</button>
+        </>
+      )}
+      {card.status === "approved" && (
+        <button className="primary-button" disabled={busy} onClick={() => run("execute")} type="button">执行退款</button>
+      )}
+    </div>
+  );
+}
+
+function refundStatusLabel(status: string) {
+  return {
+    pending_approval: "待人工确认",
+    approved: "已批准，待执行",
+    executed: "退款已完成",
+    rejected: "已拒绝",
+    failed: "执行失败"
+  }[status] || status;
 }
 
 function HistoryView(props: {
@@ -1133,6 +1210,9 @@ function normalizeResult(toolName: string, output: unknown, id: string): ResultC
     id: `${toolName}-${id}`,
     type: FUNCTION_LABELS.get(toolName) || toolName,
     title: inferTitle(toolName, value),
+    status: value && typeof value === "object" && toolName === "order_refund"
+      ? String((value as Record<string, unknown>).status || "") || undefined
+      : undefined,
     fields,
     raw: output
   };

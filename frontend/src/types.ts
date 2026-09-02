@@ -120,6 +120,21 @@ export type ResultCard = {
   raw?: unknown;
 };
 
+export type RefundStatus = "pending_approval" | "approved" | "executed" | "rejected" | "failed";
+
+export type RefundRecord = {
+  id?: string;
+  refund_id?: string;
+  account_id?: string;
+  order_id?: string;
+  reason?: string;
+  status?: RefundStatus | string;
+  message?: string;
+  failure_reason?: string | null;
+  created_at?: number;
+  updated_at?: number;
+};
+
 export type ExecutionRecord = {
   id: string;
   action: string;

@@ -31,6 +31,8 @@ from conversation_store import (
 from data import rag
 from data.product import get_products
 from data.rag import retrieval_knowledge
+from data.refunds import RefundError, get_refund_request
+from business_services import get_business_service
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -331,6 +333,10 @@ class SummaryRequest(BaseModel):
     model: str = "customer-service-agent"
 
 
+class RefundActionRequest(BaseModel):
+    account_id: str = Field("100000", max_length=100)
+
+
 async def require_api_key(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     authorization: Optional[str] = Header(default=None),
@@ -437,6 +443,34 @@ async def faq_candidates(account_id: Optional[str] = None, limit: int = 50):
     return {
         "candidates": list_faq_candidates(account_id=account_id, limit=limit),
     }
+
+
+async def refund_detail(refund_id: str, account_id: str):
+    result = await get_refund_request(account_id, refund_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Refund request not found")
+    return result
+
+
+async def approve_refund_request(refund_id: str, payload: RefundActionRequest):
+    try:
+        return await get_business_service().approve_refund(payload.account_id, refund_id)
+    except RefundError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def reject_refund_request(refund_id: str, payload: RefundActionRequest):
+    try:
+        return await get_business_service().reject_refund(payload.account_id, refund_id)
+    except RefundError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def execute_refund_request(refund_id: str, payload: RefundActionRequest):
+    try:
+        return await get_business_service().execute_refund(payload.account_id, refund_id)
+    except RefundError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 async def health_check():
@@ -851,6 +885,30 @@ def register_routes(server: BotServer) -> BotServer:
         "/api/faq-candidates",
         faq_candidates,
         methods=["GET"],
+        dependencies=business_api_dependencies,
+    )
+    server.app.add_api_route(
+        "/api/refunds/{refund_id}",
+        refund_detail,
+        methods=["GET"],
+        dependencies=business_api_dependencies,
+    )
+    server.app.add_api_route(
+        "/api/refunds/{refund_id}/approve",
+        approve_refund_request,
+        methods=["POST"],
+        dependencies=business_api_dependencies,
+    )
+    server.app.add_api_route(
+        "/api/refunds/{refund_id}/reject",
+        reject_refund_request,
+        methods=["POST"],
+        dependencies=business_api_dependencies,
+    )
+    server.app.add_api_route(
+        "/api/refunds/{refund_id}/execute",
+        execute_refund_request,
+        methods=["POST"],
         dependencies=business_api_dependencies,
     )
     server.app.add_api_route(

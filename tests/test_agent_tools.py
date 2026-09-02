@@ -52,7 +52,7 @@ class TestAgentTools(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(output["tracking_number"], shipped_order["tracking_number"])
         self.assertGreaterEqual(len(output["events"]), 1)
 
-    async def test_order_refund_executor_updates_order(self):
+    async def test_order_refund_executor_only_creates_pending_request(self):
         account_id = f"agent_{uuid4().hex}"
         executor = build_tool_executor(account_id)
         orders = await executor(
@@ -76,7 +76,7 @@ class TestAgentTools(unittest.IsolatedAsyncioTestCase):
                 },
             }
         )
-        refunded = await executor(
+        current_order = await executor(
             {
                 "id": "call_3",
                 "type": "function",
@@ -87,8 +87,9 @@ class TestAgentTools(unittest.IsolatedAsyncioTestCase):
             }
         )
 
-        self.assertEqual(refund, "Refund successful")
-        self.assertEqual(refunded["reason"], "changed mind")
+        self.assertEqual(refund["status"], "pending_approval")
+        self.assertIn("id", refund)
+        self.assertNotEqual(current_order["status"], "已退款")
 
 
 if __name__ == "__main__":

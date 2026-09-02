@@ -65,6 +65,38 @@ for:
 Tool execution details are returned in `bot_usage.action_details`, so the web UI
 can show order, logistics, refund, and knowledge-base results in the right panel.
 
+## Refund Approval Flow
+
+The `order_refund` tool creates a refund request for manual approval. It does
+not directly mark an order as refunded.
+
+```text
+pending_approval -> approved -> executed
+pending_approval -> rejected
+```
+
+Only `executed` updates the order to `已退款`. An execution attempt before
+approval returns a conflict and leaves the order unchanged.
+
+```http
+GET /api/refunds/{refund_id}?account_id=100000
+POST /api/refunds/{refund_id}/approve
+POST /api/refunds/{refund_id}/reject
+POST /api/refunds/{refund_id}/execute
+```
+
+Approval and execution requests receive the account ID in the JSON body:
+
+```json
+{
+  "account_id": "100000"
+}
+```
+
+The UI displays `pending_approval` as “待人工确认”, `approved` as “已批准，待执行”,
+and `executed` as “退款已完成”. A rejected or failed request must not update
+the order status.
+
 ## Switch Knowledge Base Provider
 
 Legacy compatibility with VolcEngine Knowledge Base:

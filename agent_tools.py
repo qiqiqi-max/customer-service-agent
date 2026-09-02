@@ -75,7 +75,8 @@ def build_openai_tools(functions: list[str] | None) -> list[dict]:
                 "function": {
                     "name": "order_refund",
                     "description": (
-                        "Process a refund request. Use only after the customer clearly "
+                        "Create a refund request for manual approval. Never execute or "
+                        "confirm a refund directly. Use only after the customer clearly "
                         "requests a refund or return and an order can be identified."
                     ),
                     "parameters": {
