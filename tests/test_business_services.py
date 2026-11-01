@@ -38,10 +38,12 @@ class TestLocalDatabaseBusinessDataService(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RefundError):
             await self.service.execute_refund(self.account_id, refund["id"])
 
-        approved = await self.service.approve_refund(self.account_id, refund["id"])
+        approved = await self.service.approve_refund(self.account_id, refund["id"], "key:approver")
         self.assertEqual(approved["status"], RefundStatus.APPROVED.value)
-        executed = await self.service.execute_refund(self.account_id, refund["id"])
+        self.assertEqual(approved["approved_by"], "key:approver")
+        executed = await self.service.execute_refund(self.account_id, refund["id"], "key:executor")
         self.assertEqual(executed["status"], RefundStatus.EXECUTED.value)
+        self.assertEqual(executed["executed_by"], "key:executor")
         refunded_order = await self.service.get_order(
             self.account_id,
             shipped_order["order_id"],
@@ -65,8 +67,9 @@ class TestLocalDatabaseBusinessDataService(unittest.IsolatedAsyncioTestCase):
             orders[0]["order_id"],
             "customer changed mind",
         )
-        rejected = await self.service.reject_refund(self.account_id, request["id"])
+        rejected = await self.service.reject_refund(self.account_id, request["id"], "key:reviewer")
         self.assertEqual(rejected["status"], RefundStatus.REJECTED.value)
+        self.assertEqual(rejected["rejected_by"], "key:reviewer")
         with self.assertRaises(RefundError):
             await self.service.execute_refund(self.account_id, request["id"])
 

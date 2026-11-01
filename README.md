@@ -21,7 +21,7 @@
 
 ## 项目能力
 
-- 接待工作台：提供客服对话、商品范围选择、流式回复开关和接待上下文展示。
+- 接待工作台：提供客服对话、商品范围选择和接待上下文展示。`/api/v3/bots/chat/completions` 支持 `stream: true` 流式输出，DeepSeek / 智谱 / 火山引擎都会边生成边推送。
 - 知识问答：支持本地 FAQ/MySQL 知识数据，也预留 Dify Dataset 检索入口。
 - 业务工具：封装订单查询、物流查询和退款申请等售后能力。
 - 退款审批：退款申请先进入 `pending_approval`，经人工批准后才允许执行，避免 Agent 直接改动订单状态。
@@ -101,6 +101,8 @@ customer-service-agent/
 
 批准、拒绝和执行退款需要审批人密钥（`REFUND_APPROVER_KEYS`），普通业务密钥（`API_KEYS`）调用这三个接口会返回 403。配置了 `API_KEYS` 但没有配置审批人密钥时，退款操作对所有调用方关闭；两者都为空时视为本地开发，接口不做鉴权，启动时会输出告警日志。详见 [API.md](API.md#refund-approval-flow)。
 
+后端开启鉴权后，在工作台「配置」页填写 API 密钥；审批人另外填写审批人密钥。两个密钥都只保存在当前标签页的 `sessionStorage` 中，关闭标签页即清除。
+
 ## MySQL 与 Dify 分工
 
 - MySQL：保存结构化业务数据，包括商品、订单、物流、会话、消息、工具调用、质检记录和 FAQ 候选。
@@ -113,7 +115,7 @@ customer-service-agent/
 
 - `products`：商品名称、描述和图片地址。
 - `orders`：订单状态、客户账号、商品和物流单号。
-- `refund_requests`：退款申请、审批状态、执行时间和失败原因。
+- `refund_requests`：退款申请、审批状态、执行时间、失败原因，以及审批人、拒绝人、执行人（`approved_by` / `rejected_by` / `executed_by`，记录密钥指纹，不存密钥原文）。
 - `tracking_events`：物流轨迹节点。
 - `faq_documents`：已沉淀的 FAQ 知识。
 - `conversations`：会话主表。
@@ -122,7 +124,7 @@ customer-service-agent/
 - `quality_reviews`：质检记录，可关联会话。
 - `faq_candidates`：客服接待中沉淀出的 FAQ 候选，可关联会话。
 
-Alembic 负责维护表结构迁移。当前迁移已经覆盖会话表外键和退款申请表，启动脚本会先执行迁移，再补齐缺失的基础数据。默认 seed 不会清空已有业务数据。
+Alembic 负责维护表结构迁移。当前迁移已经覆盖会话表外键、退款申请表和退款操作人字段，启动脚本会先执行迁移，再补齐缺失的基础数据。默认 seed 不会清空已有业务数据。
 
 ## 本地启动
 
@@ -231,15 +233,16 @@ http://127.0.0.1:8090/ready
 当前已验证：
 
 - 前端 `npm run build` 可以完成生产构建。
-- 后端测试覆盖路由鉴权、会话持久化、知识库调用和质检基础逻辑。
+- 后端测试覆盖路由鉴权、会话持久化、知识库调用、流式输出、迁移链路和质检基础逻辑，用 `uv run pytest` 运行。测试使用临时 SQLite 文件，不会写入开发数据库。
+- GitHub Actions（`.github/workflows/ci.yml`）在每次推送和 PR 时运行后端测试与前端构建。
 - 多轮会话质检会拒绝未形成完整客户提问和客服回复的会话。
-- 后端健康检查接口可用。
+- 后端健康检查接口可用，`/ready` 会对数据库执行一次真实查询。
 - 商品列表和会话列表接口可用。
-- MySQL 迁移已到 `0004_refund_requests`。
+- MySQL 迁移已到 `0005_refund_actors`，空库可以从头执行 `alembic upgrade head`。
 - MySQL 启动数据脚本支持非破坏式补齐和手动重置。
 
 需要注意：真实 AI 对话依赖有效的模型 API Key、模型名和知识库配置。使用占位环境变量时，`/api/chat` 可能返回模型配置错误，这是预期的配置问题，不是前端或数据库启动问题。
 
 ## 部署说明
 
-项目以本地 MySQL + 本地前后端启动为默认方式。仓库中保留了 Dockerfile 和 docker-compose 配置，方便后续容器化部署；当前日常开发和演示不依赖 Docker。
+项目以本地 MySQL + 本地前后端启动为部署方式，按上面「本地启动」的步骤运行即可。

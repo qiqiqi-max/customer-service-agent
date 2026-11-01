@@ -14,5 +14,14 @@ dependencies = [
     "pandas>=2.2.3",
     "pydantic>=2.13.3",
     "tos>=2.9.0",
-    "volcengine>=1.0.183",
+    "volcengine>=1.0.226",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

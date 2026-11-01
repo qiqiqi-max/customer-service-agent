@@ -1106,6 +1106,24 @@ pre {
   font-size: 12px;
 }
 
+.credentials-form {
+  display: grid;
+  max-width: 560px;
+}
+
+.form-hint {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .result-card b {
   color: var(--muted);
 }

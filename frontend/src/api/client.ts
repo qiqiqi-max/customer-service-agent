@@ -7,26 +7,33 @@ import type {
   HealthResponse,
   ProductListResponse,
   QualityResponse,
+  RefundAction,
   RefundRecord,
   SummaryResponse
   , ToolCallRecord, QualityReviewRecord, FAQCandidateRecord
 } from "../types";
+import { approverKeyOrFallback, businessKey } from "./credentials";
 
 type RequestOptions = {
   method?: "GET" | "POST";
   body?: unknown;
   signal?: AbortSignal;
+  /** Overrides the default business key, e.g. with the refund approver key. */
+  apiKey?: string;
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  const apiKey = options.apiKey ?? businessKey();
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
+  }
   const response = await fetch(path, {
     method: options.method ?? "GET",
-    headers:
-      options.body === undefined
-        ? undefined
-        : {
-            "Content-Type": "application/json"
-          },
+    headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal
   });
@@ -50,6 +57,13 @@ function safeJson(text: string): unknown {
 }
 
 function extractError(payload: unknown, status: number): string {
+  const code = errorCode(payload);
+  if (status === 401) {
+    return "访问密钥缺失或无效，请在「配置」页填写 API 密钥。";
+  }
+  if (status === 403 && code === "RefundApproverRequired") {
+    return "退款审批需要审批人密钥，请在「配置」页填写。";
+  }
   if (payload && typeof payload === "object") {
     const detail = "detail" in payload ? (payload as { detail?: unknown }).detail : undefined;
     if (detail && typeof detail === "object" && "message" in detail) {
@@ -63,6 +77,17 @@ function extractError(payload: unknown, status: number): string {
     }
   }
   return `请求失败，状态码 ${status}`;
+}
+
+function errorCode(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object" || !("detail" in payload)) {
+    return undefined;
+  }
+  const detail = (payload as { detail?: unknown }).detail;
+  if (detail && typeof detail === "object" && "code" in detail) {
+    return String((detail as { code?: unknown }).code);
+  }
+  return undefined;
 }
 
 export const api = {
@@ -154,9 +179,10 @@ export const api = {
         conversation_id: input.conversationId || undefined
       }
     })
-  ,refundAction: (refundId: string, action: "approve" | "reject" | "execute", accountId: string) =>
+  ,refundAction: (refundId: string, action: RefundAction, accountId: string) =>
     request<RefundRecord>(`/api/refunds/${encodeURIComponent(refundId)}/${action}`, {
       method: "POST",
-      body: { account_id: accountId }
+      body: { account_id: accountId },
+      apiKey: approverKeyOrFallback()
     })
 };

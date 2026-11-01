@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +15,7 @@ from arkitect.types.llm.model import (
 )
 
 import main
-from llm_provider import _make_response
+from llm_provider import _make_chunk, _make_response
 
 
 class TestRouteRegistration(unittest.TestCase):
@@ -87,7 +88,12 @@ class TestRouteRegistration(unittest.TestCase):
         self.assertEqual(general.status_code, 403)
         self.assertEqual(approver.status_code, 200)
         self.assertEqual(approver_on_business_api.status_code, 200)
-        service.approve_refund.assert_awaited_once_with("100000", "r1")
+        service.approve_refund.assert_awaited_once_with(
+            "100000",
+            "r1",
+            main._key_fingerprint("approver-key"),
+        )
+        self.assertNotIn("approver-key", service.approve_refund.call_args.args[2])
 
     def test_refund_actions_denied_without_configured_approver_keys(self):
         with patch("main.api_keys", ["secret-key"]):
@@ -133,6 +139,23 @@ class TestRouteRegistration(unittest.TestCase):
         self.assertTrue(health.headers.get("X-Request-ID", "").startswith("req_"))
         self.assertEqual(ready.status_code, 200)
         self.assertEqual(ready.json()["status"], "ready")
+
+    def test_legacy_pages_redirect_to_workbench(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch("main.FRONTEND_DIST_DIR", Path(tmp_dir)):
+                client = TestClient(main.create_server().app)
+                root = client.get("/", follow_redirects=False)
+                demo = client.get("/demo", follow_redirects=False)
+                unbuilt = client.get("/workbench")
+            (Path(tmp_dir) / "index.html").write_text("<div id=root></div>", encoding="utf-8")
+            with patch("main.FRONTEND_DIST_DIR", Path(tmp_dir)):
+                built = TestClient(main.create_server().app).get("/workbench")
+
+        self.assertEqual((root.status_code, root.headers["location"]), (307, "/workbench"))
+        self.assertEqual((demo.status_code, demo.headers["location"]), (307, "/workbench"))
+        self.assertEqual(unbuilt.status_code, 503)
+        self.assertEqual(built.status_code, 200)
+        self.assertIn("root", built.text)
 
 
 class TestChatKnowledgeUsage(unittest.IsolatedAsyncioTestCase):
@@ -237,6 +260,43 @@ class TestChatKnowledgeUsage(unittest.IsolatedAsyncioTestCase):
         record_chat_turn.assert_called_once()
         recorded_response = record_chat_turn.call_args.args[2]
         self.assertEqual(recorded_response.choices[0].message.content, "您好，")
+
+    async def test_openai_compatible_stream_is_real_and_retrieval_runs_off_loop(self):
+        loop_thread = threading.get_ident()
+        retrieval_threads = []
+        knowledge = ActionDetail(name="knowledge", tool_details=[])
+
+        def fake_retrieval(messages, doc_filter):
+            retrieval_threads.append(threading.get_ident())
+            return "", knowledge
+
+        async def fake_stream(messages, **kwargs):
+            yield _make_chunk("chatcmpl-1", 1, "deepseekv4pro", "您好")
+            yield _make_response("您好", {"id": "chatcmpl-1", "model": "deepseekv4pro"})
+
+        request = ArkChatRequest(
+            stream=True,
+            model="test",
+            messages=[ArkMessage(role="user", content="在吗")],
+        )
+        record_chat_turn = MagicMock()
+
+        with patch("main.mock_mode", False), \
+                patch("main.is_openai_compatible_provider", return_value=True), \
+                patch("main.ensure_conversation", return_value="conv_oa"), \
+                patch("main.get_products", return_value={}), \
+                patch("main.retrieval_knowledge", fake_retrieval), \
+                patch("main.stream_openai_compatible_chat", fake_stream), \
+                patch("main.run_openai_compatible_chat", AsyncMock(side_effect=AssertionError)), \
+                patch("main.record_chat_turn", record_chat_turn):
+            items = [item async for item in main.custom_support_chat.__wrapped__(request)]
+
+        self.assertNotEqual(retrieval_threads, [loop_thread])
+        self.assertEqual(items[0].choices[0].delta.content, "您好")
+        self.assertEqual(items[0].metadata["conversation_id"], "conv_oa")
+        self.assertEqual(items[-1].bot_usage.action_details[0].name, "knowledge")
+        record_chat_turn.assert_called_once()
+        self.assertEqual(record_chat_turn.call_args.args[2].choices[0].message.content, "您好")
 
 
 class TestBusinessAPI(unittest.IsolatedAsyncioTestCase):

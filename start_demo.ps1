@@ -136,7 +136,23 @@ $port = [System.Environment]::GetEnvironmentVariable("_FAAS_RUNTIME_PORT", "Proc
 if (-not $port) {
     $port = "8080"
 }
-$url = "http://127.0.0.1:$port/demo"
+$url = "http://127.0.0.1:$port/workbench"
+
+$frontendDir = Join-Path $scriptDir "frontend"
+if (-not (Test-Path (Join-Path $frontendDir "dist\index.html"))) {
+    Write-Step "Building frontend workbench (frontend/dist is missing)"
+    Push-Location $frontendDir
+    try {
+        if (-not (Test-Path "node_modules")) {
+            npm install
+            if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+        }
+        npm run build
+        if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
+    } finally {
+        Pop-Location
+    }
+}
 
 $running = Get-CimInstance Win32_Process | Where-Object {
     $_.Name -eq "python.exe" -and $_.CommandLine -like "*customer-service-agent*main.py*"
@@ -158,7 +174,7 @@ try {
     Wait-ForService -HealthUrl "http://127.0.0.1:$port/v1/ping"
     Write-Step "Service is ready"
     Write-Host ""
-    Write-Host "Demo URL: $url" -ForegroundColor Green
+    Write-Host "Workbench URL: $url" -ForegroundColor Green
     Write-Host "Process ID: $($process.Id)" -ForegroundColor Green
     Write-Host ""
     Write-Host "If the page opens but chat fails, re-check the values in .env.local." -ForegroundColor Yellow

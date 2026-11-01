@@ -1,6 +1,8 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # Licensed under the "火山方舟" 原型应用软件自用许可协议
 
+import asyncio
+import hashlib
 import os
 import time
 from pathlib import Path
@@ -18,7 +20,7 @@ from audit_store import (
     save_quality_review,
 )
 from config import api_keys, endpoint_id, language, mock_mode, refund_approver_keys
-from database import migrate_database
+from database import check_database, migrate_database
 from conversation_store import (
     attach_conversation_metadata,
     ConversationAccessError,
@@ -34,9 +36,13 @@ from data.rag import retrieval_knowledge
 from data.refunds import RefundError, get_refund_request
 from business_services import get_business_service
 from fastapi import Depends, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from llm_provider import is_openai_compatible_provider, run_openai_compatible_chat
+from llm_provider import (
+    is_openai_compatible_provider,
+    run_openai_compatible_chat,
+    stream_openai_compatible_chat,
+)
 from mock_agent import make_mock_chat_response, stream_mock_response
 from next_question import next_question_chat
 from observability import configure_observability, elapsed_ms, log_event, monotonic
@@ -68,9 +74,9 @@ from arkitect.utils.context import (
     set_resource_type,
 )
 from volcenginesdkarkruntime.types.chat.chat_completion import Choice
+from volcenginesdkarkruntime.types.chat.chat_completion_chunk import Choice as ChunkChoice
 
 BACKEND_DIR = Path(__file__).resolve().parent
-WEBUI_DIR = BACKEND_DIR / "webui"
 FRONTEND_DIST_DIR = BACKEND_DIR / "frontend" / "dist"
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
@@ -82,7 +88,8 @@ async def custom_support_chat(
     meta_data = request.metadata if request.metadata else {}
     account_id = meta_data.get("account_id", "test")
     try:
-        conversation_id = ensure_conversation(
+        conversation_id = await asyncio.to_thread(
+            ensure_conversation,
             meta_data.get("conversation_id"),
             account_id,
         )
@@ -114,7 +121,7 @@ async def custom_support_chat(
             duration_ms=elapsed_ms(started),
         )
         attach_conversation_metadata(response, conversation_id)
-        record_chat_turn(conversation_id, request, response)
+        await asyncio.to_thread(record_chat_turn, conversation_id, request, response)
         if request.stream:
             async for chunk in stream_mock_response(response):
                 yield chunk
@@ -126,7 +133,9 @@ async def custom_support_chat(
         "support_functions",
         [*FUNCTION_MAP],
     )
-    products = meta_data.get("product_list", [*get_products()])
+    products = meta_data.get("product_list")
+    if products is None:
+        products = [*await asyncio.to_thread(get_products)]
 
     tools, system_prompt = register_support_functions(functions, products, account_id)
     messages = [ArkMessage(role="system", content=system_prompt)]
@@ -136,7 +145,8 @@ async def custom_support_chat(
     action_detail = None
     retrieval_started = monotonic()
     try:
-        knowledge_prompt, action_detail = retrieval_knowledge(
+        knowledge_prompt, action_detail = await asyncio.to_thread(
+            retrieval_knowledge,
             messages,
             {
                 "op": "or",
@@ -175,26 +185,53 @@ async def custom_support_chat(
         provider_messages = [*messages]
         if knowledge_prompt:
             provider_messages.append(ArkMessage(role="system", content=knowledge_prompt))
-        response = await run_openai_compatible_chat(
-            provider_messages,
-            tools=build_openai_tools(functions),
-            tool_executor=build_tool_executor(account_id),
-        )
-        if action_detail:
-            if not response.bot_usage:
-                response.bot_usage = BotUsage(action_details=[action_detail])
-            else:
-                response.bot_usage.action_details = [
-                    *(response.bot_usage.action_details or []),
-                    action_detail,
-                ]
-        attach_conversation_metadata(response, conversation_id)
-        record_chat_turn(conversation_id, request, response)
-        if request.stream:
-            async for chunk in stream_mock_response(response):
-                yield chunk
-        else:
+        provider_kwargs = {
+            "tools": build_openai_tools(functions),
+            "tool_executor": build_tool_executor(account_id),
+        }
+        if not request.stream:
+            response = await run_openai_compatible_chat(provider_messages, **provider_kwargs)
+            _append_action_detail(response, action_detail)
+            attach_conversation_metadata(response, conversation_id)
+            await asyncio.to_thread(record_chat_turn, conversation_id, request, response)
             yield response
+            return
+
+        streamed_text = []
+        last_model = None
+        final_response = None
+        recorded = False
+        try:
+            async for item in stream_openai_compatible_chat(provider_messages, **provider_kwargs):
+                if isinstance(item, ArkChatResponse):
+                    final_response = item
+                    continue
+                last_model = getattr(item, "model", None) or last_model
+                _attach_metadata(item, conversation_id)
+                content_delta = _chunk_content(item)
+                if content_delta:
+                    streamed_text.append(content_delta)
+                yield item
+
+            _append_action_detail(final_response, action_detail)
+            attach_conversation_metadata(final_response, conversation_id)
+            recorded = True
+            await asyncio.to_thread(record_chat_turn, conversation_id, request, final_response)
+            yield _final_stream_chunk(final_response)
+        finally:
+            if not recorded:
+                # Client disconnect or provider error: keep the user message and partial reply.
+                record_chat_turn(
+                    conversation_id,
+                    request,
+                    _text_response(
+                        response_id=None,
+                        model=last_model or "openai-compatible",
+                        text="".join(streamed_text),
+                        bot_usage=None,
+                        conversation_id=conversation_id,
+                    ),
+                )
         return
 
     llm = BaseChatLanguageModel(
@@ -239,23 +276,12 @@ async def custom_support_chat(
             record_chat_turn(
                 conversation_id,
                 request,
-                ArkChatResponse(
-                    id=last_response_id or f"stream-{int(time.time() * 1000)}",
-                    created=int(time.time()),
+                _text_response(
+                    response_id=last_response_id,
                     model=last_model,
-                    object="chat.completion",
-                    choices=[
-                        Choice(
-                            index=0,
-                            finish_reason="stop",
-                            message={
-                                "role": "assistant",
-                                "content": "".join(streamed_text),
-                            },
-                        )
-                    ],
+                    text="".join(streamed_text),
                     bot_usage=last_bot_usage,
-                    metadata={"conversation_id": conversation_id},
+                    conversation_id=conversation_id,
                 ),
             )
             log_event(
@@ -290,7 +316,7 @@ async def custom_support_chat(
             else:
                 resp.bot_usage = BotUsage(action_details=[action_detail])
         attach_conversation_metadata(resp, conversation_id)
-        record_chat_turn(conversation_id, request, resp)
+        await asyncio.to_thread(record_chat_turn, conversation_id, request, resp)
         yield resp
 
 
@@ -362,18 +388,19 @@ async def require_api_key(
 async def require_refund_approver(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     authorization: Optional[str] = Header(default=None),
-):
+) -> str:
     """Approve, reject and execute need an approver key once any key is configured.
 
     With API_KEYS set but REFUND_APPROVER_KEYS empty, refund actions are denied
-    rather than falling back to the general keys.
+    rather than falling back to the general keys. Returns the actor recorded on
+    the refund request: a key fingerprint, never the key itself.
     """
     if not api_keys and not refund_approver_keys:
-        return
+        return ANONYMOUS_ACTOR
 
     token = _request_token(x_api_key, authorization)
     if token in refund_approver_keys:
-        return
+        return _key_fingerprint(token)
     if token in api_keys:
         raise HTTPException(
             status_code=403,
@@ -383,6 +410,13 @@ async def require_refund_approver(
             },
         )
     raise _unauthorized()
+
+
+ANONYMOUS_ACTOR = "anonymous"
+
+
+def _key_fingerprint(token: str) -> str:
+    return "key:" + hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
 
 
 def _request_token(x_api_key: Optional[str], authorization: Optional[str]) -> Optional[str]:
@@ -413,22 +447,26 @@ def _bearer_token(authorization: Optional[str]) -> Optional[str]:
 
 
 async def list_products():
-    products_dict = get_products()
+    products_dict = await asyncio.to_thread(get_products)
     return ProductListResponse(
         products=[Product(**v) for v in products_dict.values()],
         total=len(products_dict),
     )
 
 
-async def demo_page():
-    return FileResponse(WEBUI_DIR / "index.html")
+async def redirect_to_workbench():
+    return RedirectResponse("/workbench", status_code=307)
 
 
 async def workbench_page():
     frontend_index = FRONTEND_DIST_DIR / "index.html"
     if frontend_index.exists():
         return FileResponse(frontend_index)
-    return FileResponse(WEBUI_DIR / "index.html")
+    return PlainTextResponse(
+        "Workbench is not built. Run `npm install && npm run build` in frontend/, "
+        "or use the Vite dev server (npm run dev).",
+        status_code=503,
+    )
 
 
 AccountIdQuery = Query(..., min_length=1, max_length=100)
@@ -439,14 +477,23 @@ async def conversations(
     limit: int = 20,
     offset: int = 0,
 ):
-    return list_conversations(limit=limit, offset=offset, account_id=account_id)
+    return await asyncio.to_thread(
+        list_conversations,
+        limit=limit,
+        offset=offset,
+        account_id=account_id,
+    )
 
 
 async def conversation_detail(
     conversation_id: str,
     account_id: str = AccountIdQuery,
 ):
-    conversation = get_conversation(conversation_id, account_id=account_id)
+    conversation = await asyncio.to_thread(
+        get_conversation,
+        conversation_id,
+        account_id=account_id,
+    )
     if not conversation:
         raise HTTPException(
             status_code=404,
@@ -465,7 +512,8 @@ async def conversation_tool_calls(
 ):
     return {
         "conversation_id": conversation_id,
-        "tool_calls": list_tool_calls(
+        "tool_calls": await asyncio.to_thread(
+            list_tool_calls,
             conversation_id,
             account_id=account_id,
             limit=limit,
@@ -479,7 +527,8 @@ async def quality_reviews(
     limit: int = 50,
 ):
     return {
-        "reviews": list_quality_reviews(
+        "reviews": await asyncio.to_thread(
+            list_quality_reviews,
             account_id=account_id,
             conversation_id=conversation_id,
             limit=limit,
@@ -489,7 +538,11 @@ async def quality_reviews(
 
 async def faq_candidates(account_id: str = AccountIdQuery, limit: int = 50):
     return {
-        "candidates": list_faq_candidates(account_id=account_id, limit=limit),
+        "candidates": await asyncio.to_thread(
+            list_faq_candidates,
+            account_id=account_id,
+            limit=limit,
+        ),
     }
 
 
@@ -500,23 +553,35 @@ async def refund_detail(refund_id: str, account_id: str = AccountIdQuery):
     return result
 
 
-async def approve_refund_request(refund_id: str, payload: RefundActionRequest):
+async def approve_refund_request(
+    refund_id: str,
+    payload: RefundActionRequest,
+    actor: str = Depends(require_refund_approver),
+):
     try:
-        return await get_business_service().approve_refund(payload.account_id, refund_id)
+        return await get_business_service().approve_refund(payload.account_id, refund_id, actor)
     except RefundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-async def reject_refund_request(refund_id: str, payload: RefundActionRequest):
+async def reject_refund_request(
+    refund_id: str,
+    payload: RefundActionRequest,
+    actor: str = Depends(require_refund_approver),
+):
     try:
-        return await get_business_service().reject_refund(payload.account_id, refund_id)
+        return await get_business_service().reject_refund(payload.account_id, refund_id, actor)
     except RefundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-async def execute_refund_request(refund_id: str, payload: RefundActionRequest):
+async def execute_refund_request(
+    refund_id: str,
+    payload: RefundActionRequest,
+    actor: str = Depends(require_refund_approver),
+):
     try:
-        return await get_business_service().execute_refund(payload.account_id, refund_id)
+        return await get_business_service().execute_refund(payload.account_id, refund_id, actor)
     except RefundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -530,13 +595,12 @@ async def health_check():
 
 async def readiness_check():
     checks = {
-        "webui": WEBUI_DIR.exists(),
         "conversation_store": True,
     }
     errors = {}
 
     try:
-        init_db()
+        await asyncio.to_thread(check_database)
     except Exception as exc:
         checks["conversation_store"] = False
         errors["conversation_store"] = str(exc)
@@ -565,7 +629,7 @@ async def api_chat(chat: BusinessChatRequest):
     metadata = {
         "account_id": chat.account_id,
         "support_functions": chat.support_functions,
-        "product_list": chat.product_list or [*get_products()],
+        "product_list": chat.product_list or [*await asyncio.to_thread(get_products)],
     }
     if chat.conversation_id:
         metadata["conversation_id"] = chat.conversation_id
@@ -588,7 +652,11 @@ async def api_chat(chat: BusinessChatRequest):
 
 async def api_save_faq(faq: FAQRequest):
     if faq.conversation_id:
-        conversation = get_conversation(faq.conversation_id, account_id=faq.account_id)
+        conversation = await asyncio.to_thread(
+            get_conversation,
+            faq.conversation_id,
+            account_id=faq.account_id,
+        )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
         history = [
@@ -605,7 +673,8 @@ async def api_save_faq(faq: FAQRequest):
                 faq.answer,
             )
     result = await save_faq(faq)
-    save_faq_candidate(
+    await asyncio.to_thread(
+        save_faq_candidate,
         account_id=faq.account_id,
         conversation_id=faq.conversation_id,
         question=faq.question,
@@ -618,7 +687,11 @@ async def api_save_faq(faq: FAQRequest):
 async def api_quality_check(payload: QualityCheckRequest):
     review_content = payload.content
     if payload.conversation_id:
-        conversation = get_conversation(payload.conversation_id, account_id=payload.account_id)
+        conversation = await asyncio.to_thread(
+            get_conversation,
+            payload.conversation_id,
+            account_id=payload.account_id,
+        )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
         conversation_lines = [
@@ -655,7 +728,8 @@ async def api_quality_check(payload: QualityCheckRequest):
     )
     response = await _collect_first_response(quality_inspection_chat, request)
     result_text = _assistant_content(response)
-    save_quality_review(
+    await asyncio.to_thread(
+        save_quality_review,
         account_id=payload.account_id,
         conversation_id=payload.conversation_id,
         content=review_content,
@@ -736,6 +810,61 @@ def _bot_usage(response: ArkChatResponse):
     return response.bot_usage.model_dump(mode="json") if response.bot_usage else None
 
 
+def _append_action_detail(response: ArkChatResponse, action_detail: ActionDetail | None) -> None:
+    if not action_detail:
+        return
+    if not response.bot_usage:
+        response.bot_usage = BotUsage(action_details=[action_detail])
+    else:
+        response.bot_usage.action_details = [
+            *(response.bot_usage.action_details or []),
+            action_detail,
+        ]
+
+
+def _text_response(
+    response_id: Optional[str],
+    model: str,
+    text: str,
+    bot_usage: Optional[BotUsage],
+    conversation_id: str,
+) -> ArkChatResponse:
+    return ArkChatResponse(
+        id=response_id or f"stream-{int(time.time() * 1000)}",
+        created=int(time.time()),
+        model=model,
+        object="chat.completion",
+        choices=[
+            Choice(
+                index=0,
+                finish_reason="stop",
+                message={"role": "assistant", "content": text},
+            )
+        ],
+        bot_usage=bot_usage,
+        metadata={"conversation_id": conversation_id},
+    )
+
+
+def _final_stream_chunk(response: ArkChatResponse) -> ArkChatCompletionChunk:
+    """Closing chunk that carries tool usage and metadata, like the mock stream's last chunk."""
+    return ArkChatCompletionChunk(
+        id=response.id,
+        created=response.created,
+        model=response.model,
+        object="chat.completion.chunk",
+        choices=[
+            ChunkChoice(
+                index=0,
+                delta={"role": "assistant", "content": ""},
+                finish_reason=response.choices[0].finish_reason if response.choices else "stop",
+            )
+        ],
+        bot_usage=response.bot_usage,
+        metadata=response.metadata,
+    )
+
+
 def _attach_metadata(response, conversation_id: str):
     metadata = getattr(response, "metadata", None) or {}
     metadata["conversation_id"] = conversation_id
@@ -768,7 +897,8 @@ def _action_hit_count(action_detail: ActionDetail | None) -> int:
 async def save_faq(faq: FAQRequest):
     columns_order = ["question", "answer", "score"]
     try:
-        rag.save_faq(
+        await asyncio.to_thread(
+            rag.save_faq,
             pd.DataFrame(
                 [{"question": faq.question, "answer": faq.answer, "score": faq.score}],
                 columns=columns_order,
@@ -850,19 +980,17 @@ def register_routes(server: BotServer) -> BotServer:
         return response
 
     business_api_dependencies = [Depends(require_api_key)]
-    refund_approver_dependencies = [Depends(require_refund_approver)]
     server.app.add_api_route(
         "/api/v3/bots/chat/completions",
         get_handler(custom_support_chat),
         methods=["POST"],
         dependencies=business_api_dependencies,
     )
-    server.app.add_api_route("/", demo_page, methods=["GET"])
-    server.app.add_api_route("/demo", demo_page, methods=["GET"])
+    server.app.add_api_route("/", redirect_to_workbench, methods=["GET"])
+    server.app.add_api_route("/demo", redirect_to_workbench, methods=["GET"])
     server.app.add_api_route("/workbench", workbench_page, methods=["GET"])
     server.app.add_api_route("/health", health_check, methods=["GET"])
     server.app.add_api_route("/ready", readiness_check, methods=["GET"])
-    server.app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="webui")
     if FRONTEND_ASSETS_DIR.exists():
         server.app.mount(
             "/assets",
@@ -942,23 +1070,22 @@ def register_routes(server: BotServer) -> BotServer:
         methods=["GET"],
         dependencies=business_api_dependencies,
     )
+    # Refund actions authenticate through the handler's require_refund_approver
+    # dependency, which also yields the actor recorded on the request.
     server.app.add_api_route(
         "/api/refunds/{refund_id}/approve",
         approve_refund_request,
         methods=["POST"],
-        dependencies=refund_approver_dependencies,
     )
     server.app.add_api_route(
         "/api/refunds/{refund_id}/reject",
         reject_refund_request,
         methods=["POST"],
-        dependencies=refund_approver_dependencies,
     )
     server.app.add_api_route(
         "/api/refunds/{refund_id}/execute",
         execute_refund_request,
         methods=["POST"],
-        dependencies=refund_approver_dependencies,
     )
     server.app.add_api_route(
         "/api/v3/bots/chat/completions/save_faq",

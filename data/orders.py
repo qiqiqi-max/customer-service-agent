@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy import delete, insert, select, update
 
-from database import get_engine, init_db, orders as orders_table, tracking_events
+from database import get_engine, in_thread, init_db, orders as orders_table, tracking_events
 from config import language
 from seed_data import build_demo_order_rows, build_demo_tracking_rows
 
@@ -43,9 +43,10 @@ class Order:
         return data
 
 
-async def get_order(account_id: str, order_id: str) -> Optional[Dict[str, str]]:
+@in_thread
+def get_order(account_id: str, order_id: str) -> Optional[Dict[str, str]]:
     init_db()
-    await _ensure_account_seeded(account_id)
+    _ensure_account_seeded(account_id)
     with get_engine().connect() as conn:
         row = conn.execute(
             select(orders_table).where(orders_table.c.account_id == account_id).where(
@@ -55,9 +56,10 @@ async def get_order(account_id: str, order_id: str) -> Optional[Dict[str, str]]:
     return _row_to_order(row) if row else None
 
 
-async def get_orders_by_product(account_id: str, product: str) -> List[Dict[str, str]]:
+@in_thread
+def get_orders_by_product(account_id: str, product: str) -> List[Dict[str, str]]:
     init_db()
-    await _ensure_account_seeded(account_id)
+    _ensure_account_seeded(account_id)
     with get_engine().connect() as conn:
         rows = conn.execute(
             select(orders_table)
@@ -68,9 +70,10 @@ async def get_orders_by_product(account_id: str, product: str) -> List[Dict[str,
     return [_row_to_order(row) for row in rows]
 
 
-async def get_all_orders(account_id: str) -> List[Dict[str, str]]:
+@in_thread
+def get_all_orders(account_id: str) -> List[Dict[str, str]]:
     init_db()
-    await _ensure_account_seeded(account_id)
+    _ensure_account_seeded(account_id)
     with get_engine().connect() as conn:
         rows = conn.execute(
             select(orders_table)
@@ -80,11 +83,12 @@ async def get_all_orders(account_id: str) -> List[Dict[str, str]]:
     return [_row_to_order(row) for row in rows]
 
 
-async def update_order_status(
+@in_thread
+def update_order_status(
     account_id: str, order_id: str, status: OrderStatus, reason: Optional[str] = None
 ) -> bool:
     init_db()
-    await _ensure_account_seeded(account_id)
+    _ensure_account_seeded(account_id)
     now = int(time.time())
     with get_engine().begin() as conn:
         result = conn.execute(
@@ -102,7 +106,7 @@ def _row_to_order(row: dict) -> Dict[str, str]:
     return {k: str(v) for k, v in data.items() if v is not None}
 
 
-async def _ensure_account_seeded(account_id: str) -> None:
+def _ensure_account_seeded(account_id: str) -> None:
     with get_engine().connect() as conn:
         existing = conn.execute(
             select(orders_table.c.order_id).where(orders_table.c.account_id == account_id)

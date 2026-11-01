@@ -113,6 +113,13 @@ REFUND_APPROVER_KEYS=key_for_refund_reviewer
 Approver keys are also accepted on the other business endpoints, so a reviewer
 can read conversations and refund details with the same key.
 
+Each action records who performed it in `approved_by`, `rejected_by`, or
+`executed_by` (a failed execution also sets `executed_by`). The value is a key
+fingerprint such as `key:88ae5c094a5c` (the first 12 hex characters of the
+key's SHA-256), never the key itself. With auth disabled the value is
+`anonymous`. When `BUSINESS_DATA_PROVIDER=http`, the same value is forwarded to
+the business API as the `X-Refund-Actor` header.
+
 The UI displays `pending_approval` as “待人工确认”, `approved` as “已批准，待执行”,
 and `executed` as “退款已完成”. A rejected or failed request must not update
 the order status.
@@ -252,11 +259,17 @@ Response:
 {
   "status": "ready",
   "checks": {
-    "webui": true,
     "conversation_store": true
   }
 }
 ```
+
+`conversation_store` runs a `SELECT 1` against the configured database on every
+call, so it reports real connectivity.
+
+The workbench is served at `GET /workbench` from `frontend/dist` (build it with
+`npm run build`). `/` and `/demo` redirect there. If the frontend has not been
+built, `/workbench` returns 503 with build instructions.
 
 ## Standard Business APIs
 

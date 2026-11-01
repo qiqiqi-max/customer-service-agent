@@ -49,15 +49,21 @@ class BusinessDataService(ABC):
         pass
 
     @abstractmethod
-    async def approve_refund(self, account_id: str, refund_id: str) -> Any:
+    async def approve_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
         pass
 
     @abstractmethod
-    async def execute_refund(self, account_id: str, refund_id: str) -> Any:
+    async def execute_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
         pass
 
     @abstractmethod
-    async def reject_refund(self, account_id: str, refund_id: str) -> Any:
+    async def reject_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
         pass
 
 
@@ -117,7 +123,7 @@ class LocalDatabaseBusinessDataService(BusinessDataService):
             _log_business_call("get_tracking", self.provider_name, account_id, started, result)
             return result
 
-        result = tracking.get_tracking_info(tracking_number)
+        result = await asyncio.to_thread(tracking.get_tracking_info, tracking_number)
         _log_business_call("get_tracking", self.provider_name, account_id, started, result)
         return result
 
@@ -127,14 +133,20 @@ class LocalDatabaseBusinessDataService(BusinessDataService):
         _log_business_call("refund_order", self.provider_name, account_id, started, result)
         return result
 
-    async def approve_refund(self, account_id: str, refund_id: str) -> Any:
-        return await approve_refund(account_id, refund_id)
+    async def approve_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
+        return await approve_refund(account_id, refund_id, actor)
 
-    async def execute_refund(self, account_id: str, refund_id: str) -> Any:
-        return await execute_refund(account_id, refund_id)
+    async def execute_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
+        return await execute_refund(account_id, refund_id, actor)
 
-    async def reject_refund(self, account_id: str, refund_id: str) -> Any:
-        return await reject_refund(account_id, refund_id)
+    async def reject_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
+        return await reject_refund(account_id, refund_id, actor)
 
 
 class MockBusinessDataService(LocalDatabaseBusinessDataService):
@@ -205,25 +217,34 @@ class HttpBusinessDataService(BusinessDataService):
             },
         )
 
-    async def approve_refund(self, account_id: str, refund_id: str) -> Any:
+    async def approve_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
         return await self._request(
             "POST",
-            f"/refunds/{refund_id}/approve",
+            f"/refunds/{urllib.parse.quote(refund_id)}/approve",
             query={"account_id": account_id},
+            headers=_actor_headers(actor),
         )
 
-    async def execute_refund(self, account_id: str, refund_id: str) -> Any:
+    async def execute_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
         return await self._request(
             "POST",
-            f"/refunds/{refund_id}/execute",
+            f"/refunds/{urllib.parse.quote(refund_id)}/execute",
             query={"account_id": account_id},
+            headers=_actor_headers(actor),
         )
 
-    async def reject_refund(self, account_id: str, refund_id: str) -> Any:
+    async def reject_refund(
+        self, account_id: str, refund_id: str, actor: str | None = None
+    ) -> Any:
         return await self._request(
             "POST",
-            f"/refunds/{refund_id}/reject",
+            f"/refunds/{urllib.parse.quote(refund_id)}/reject",
             query={"account_id": account_id},
+            headers=_actor_headers(actor),
         )
 
     async def _request(
@@ -232,6 +253,7 @@ class HttpBusinessDataService(BusinessDataService):
         path: str,
         query: dict[str, str] | None = None,
         payload: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> Any:
         started = monotonic()
         try:
@@ -241,6 +263,7 @@ class HttpBusinessDataService(BusinessDataService):
                 path,
                 query,
                 payload,
+                headers,
             )
         except Exception as exc:
             log_event(
@@ -263,6 +286,7 @@ class HttpBusinessDataService(BusinessDataService):
         path: str,
         query: dict[str, str] | None,
         payload: dict[str, Any] | None,
+        extra_headers: dict[str, str] | None = None,
     ) -> Any:
         url = f"{self.base_url}{path}"
         clean_query = {
@@ -280,6 +304,7 @@ class HttpBusinessDataService(BusinessDataService):
             headers["Content-Type"] = "application/json"
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        headers.update(extra_headers or {})
 
         request = urllib.request.Request(
             url,
@@ -304,6 +329,10 @@ class HttpBusinessDataService(BusinessDataService):
             return json.loads(raw)
         except json.JSONDecodeError as exc:
             raise BusinessServiceError("Business API returned non-JSON response.") from exc
+
+
+def _actor_headers(actor: str | None) -> dict[str, str]:
+    return {"X-Refund-Actor": actor} if actor else {}
 
 
 _service: BusinessDataService | None = None

@@ -6,7 +6,7 @@ Create Date: 2026-09-02
 """
 
 from alembic import op
-from sqlalchemy import BigInteger, Column, ForeignKey, String, Table, Text
+from sqlalchemy import BigInteger, Column, ForeignKey, String, Text, inspect
 
 
 revision = "0004_refund_requests"
@@ -16,6 +16,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 0001 runs metadata.create_all with the current schema, so on a fresh
+    # database this table and its indexes already exist.
+    if inspect(op.get_bind()).has_table("refund_requests"):
+        return
     op.create_table(
         "refund_requests",
         Column("id", String(100), primary_key=True),

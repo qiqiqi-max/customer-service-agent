@@ -198,6 +198,83 @@ class TestOpenAICompatibleProvider(unittest.IsolatedAsyncioTestCase):
             "order_check",
         )
 
+    async def test_stream_openai_compatible_chat_streams_and_runs_split_tool_calls(self):
+        requests = []
+        round_events = [
+            [
+                {"id": "chatcmpl-s1", "created": 1, "model": "deepseekv4pro", "choices": [
+                    {"delta": {"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
+                                               "function": {"name": "order_check", "arguments": "{\"order_"}}]}}
+                ]},
+                {"id": "chatcmpl-s1", "choices": [
+                    {"delta": {"tool_calls": [{"index": 0, "function": {"arguments": "id\": \"100000_1\"}"}}]},
+                     "finish_reason": "tool_calls"}
+                ]},
+            ],
+            [
+                {"id": "chatcmpl-s2", "choices": [{"delta": {"content": "已查到"}}]},
+                {"id": "chatcmpl-s2", "choices": [{"delta": {"content": "订单。"}, "finish_reason": "stop"}]},
+            ],
+        ]
+
+        def fake_urlopen(request, timeout):
+            requests.append(json.loads(request.data.decode("utf-8")))
+            return FakeSSEResponse(round_events[len(requests) - 1])
+
+        executed = []
+
+        async def fake_executor(tool_call):
+            executed.append(json.loads(tool_call["function"]["arguments"]))
+            return [{"order_id": "100000_1"}]
+
+        tools = [{"type": "function", "function": {"name": "order_check", "parameters": {}}}]
+
+        with patch("llm_provider.config.deepseek_api_key", "test-key"):
+            with patch("urllib.request.urlopen", fake_urlopen):
+                items = [
+                    item async for item in llm_provider.stream_openai_compatible_chat(
+                        [ArkMessage(role="user", content="查订单")],
+                        tools=tools,
+                        tool_executor=fake_executor,
+                    )
+                ]
+
+        chunks, final = items[:-1], items[-1]
+        self.assertTrue(all(request["stream"] for request in requests))
+        self.assertEqual(executed, [{"order_id": "100000_1"}])
+        self.assertEqual(requests[1]["messages"][-1]["role"], "tool")
+        self.assertEqual([chunk.choices[0].delta.content for chunk in chunks], ["已查到", "订单。"])
+        self.assertEqual({chunk.id for chunk in chunks}, {"chatcmpl-s1"})
+        self.assertEqual(final.choices[0].message.content, "已查到订单。")
+        self.assertEqual(final.bot_usage.action_details[0].tool_details[0].name, "order_check")
+
+    def test_unknown_finish_reason_is_normalized(self):
+        response = llm_provider._make_response(
+            "",
+            {"choices": [{"finish_reason": "sensitive"}]},
+        )
+        fallback = llm_provider._make_response("", {"choices": [{"finish_reason": "network_error"}]})
+
+        self.assertEqual(response.choices[0].finish_reason, "content_filter")
+        self.assertEqual(fallback.choices[0].finish_reason, "stop")
+
+
+class FakeSSEResponse:
+    def __init__(self, events: list[dict]):
+        lines = [b": keep-alive\n", b"\n"]
+        for event in events:
+            lines.append(f"data: {json.dumps(event, ensure_ascii=False)}\n".encode("utf-8"))
+            lines.append(b"\n")
+        lines.append(b"data: [DONE]\n")
+        self.lines = lines
+        self.closed = False
+
+    def readline(self):
+        return self.lines.pop(0) if self.lines else b""
+
+    def close(self):
+        self.closed = True
+
 
 if __name__ == "__main__":
     unittest.main()

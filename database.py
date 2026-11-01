@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
+import asyncio
+import threading
+from functools import lru_cache, wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable, ParamSpec, TypeVar
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
@@ -72,6 +74,9 @@ refund_requests = Table(
     Column("executed_at", BigInteger, nullable=True),
     Column("rejected_at", BigInteger, nullable=True),
     Column("failure_reason", Text, nullable=True),
+    Column("approved_by", String(100), nullable=True),
+    Column("rejected_by", String(100), nullable=True),
+    Column("executed_by", String(100), nullable=True),
 )
 
 tracking_events = Table(
@@ -219,10 +224,36 @@ def _get_engine_for_url(url: str) -> Engine:
     return engine
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def in_thread(func: Callable[P, R]) -> Callable[P, Awaitable[R]]:
+    """Expose a blocking database function as a coroutine that runs in a worker thread."""
+
+    @wraps(func)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        return await asyncio.to_thread(func, *args, **kwargs)
+
+    return wrapper
+
+
+_initialized_urls: set[str] = set()
+_init_lock = threading.Lock()
+
+
 def init_db() -> None:
-    engine = get_engine()
-    metadata.create_all(engine)
-    ensure_seed_data(engine)
+    """Create tables and seed base data once per database URL per process."""
+    url = get_database_url()
+    if url in _initialized_urls:
+        return
+    with _init_lock:
+        if url in _initialized_urls:
+            return
+        engine = get_engine(url)
+        metadata.create_all(engine)
+        ensure_seed_data(engine)
+        _initialized_urls.add(url)
 
 
 def migrate_database() -> None:
@@ -230,8 +261,17 @@ def migrate_database() -> None:
     command.upgrade(alembic_config, "head")
 
 
+def check_database() -> None:
+    """Initialize if needed, then run a real round trip so readiness reflects connectivity."""
+    init_db()
+    with get_engine().connect() as conn:
+        conn.exec_driver_sql("SELECT 1")
+
+
 def dispose_engines() -> None:
     _get_engine_for_url.cache_clear()
+    with _init_lock:
+        _initialized_urls.clear()
 
 
 def _enable_sqlite_foreign_keys(engine: Engine) -> None:

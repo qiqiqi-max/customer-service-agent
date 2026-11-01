@@ -122,6 +122,8 @@ export type ResultCard = {
 
 export type RefundStatus = "pending_approval" | "approved" | "executed" | "rejected" | "failed";
 
+export type RefundAction = "approve" | "reject" | "execute";
+
 export type RefundRecord = {
   id?: string;
   refund_id?: string;
@@ -133,6 +135,9 @@ export type RefundRecord = {
   failure_reason?: string | null;
   created_at?: number;
   updated_at?: number;
+  approved_by?: string | null;
+  rejected_by?: string | null;
+  executed_by?: string | null;
 };
 
 export type ExecutionRecord = {

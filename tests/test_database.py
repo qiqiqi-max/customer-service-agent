@@ -18,7 +18,7 @@ from audit_store import (
     save_faq_candidate,
     save_quality_review,
 )
-from database import get_engine
+from database import dispose_engines, get_engine, init_db
 from llm_provider import _make_response
 
 
@@ -114,6 +114,24 @@ class TestDatabasePersistence(unittest.TestCase):
         self.assertEqual(account_a_reviews[0]["content"], "回复 A")
         self.assertEqual(len(account_b_candidates), 1)
         self.assertEqual(account_b_candidates[0]["question"], "问题 B")
+
+    def test_init_db_runs_schema_and_seed_once_per_url(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            first_path = str(Path(tmp_dir) / "first.sqlite3")
+            second_path = str(Path(tmp_dir) / "second.sqlite3")
+            with patch("database.ensure_seed_data") as seed:
+                with patch("conversation_store.config.conversation_db_path", first_path):
+                    init_db()
+                    init_db()
+                with patch("conversation_store.config.conversation_db_path", second_path):
+                    init_db()
+                first_url_seeded = seed.call_count
+                dispose_engines()
+                with patch("conversation_store.config.conversation_db_path", first_path):
+                    init_db()
+
+        self.assertEqual(first_url_seeded, 2)
+        self.assertEqual(seed.call_count, 3)
 
 
 if __name__ == "__main__":

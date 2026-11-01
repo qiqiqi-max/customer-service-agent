@@ -15,11 +15,18 @@ Run in:
 
 `<project-root>`
 
+Dependencies are declared in `pyproject.toml` and pinned in `uv.lock`
+(including `arkitect` and the langchain packages it needs):
+
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python -m pip install --upgrade "arkitect==0.2.1" "langchain==0.3.25" "langchain-core==0.3.58" "langchain-text-splitters==0.3.8"
+.\.venv\Scripts\Activate.ps1
+pip install uv
+uv sync
 ```
+
+`uv sync` also installs the `dev` group (pytest). Run the tests with
+`uv run pytest`.
 
 ## 3) Environment variables
 

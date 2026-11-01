@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from sqlalchemy import insert, select, update
 
-from database import get_engine, init_db, orders, refund_requests
+from database import get_engine, in_thread, init_db, orders, refund_requests
 from data.orders import OrderStatus
 
 
@@ -49,7 +49,8 @@ def _get_request(conn, refund_id: str, account_id: str) -> dict[str, Any] | None
     return _row_to_dict(row) if row else None
 
 
-async def create_refund_request(
+@in_thread
+def create_refund_request(
     account_id: str,
     order_id: str,
     reason: str = "",
@@ -102,27 +103,32 @@ async def create_refund_request(
         return result
 
 
-async def approve_refund(account_id: str, refund_id: str) -> dict[str, Any]:
-    return await _transition_refund(
+@in_thread
+def approve_refund(account_id: str, refund_id: str, actor: str | None = None) -> dict[str, Any]:
+    return _transition_refund(
         account_id,
         refund_id,
         RefundStatus.PENDING_APPROVAL.value,
         RefundStatus.APPROVED.value,
         approved_at=_now(),
+        approved_by=actor,
     )
 
 
-async def reject_refund(account_id: str, refund_id: str) -> dict[str, Any]:
-    return await _transition_refund(
+@in_thread
+def reject_refund(account_id: str, refund_id: str, actor: str | None = None) -> dict[str, Any]:
+    return _transition_refund(
         account_id,
         refund_id,
         RefundStatus.PENDING_APPROVAL.value,
         RefundStatus.REJECTED.value,
         rejected_at=_now(),
+        rejected_by=actor,
     )
 
 
-async def execute_refund(account_id: str, refund_id: str) -> dict[str, Any]:
+@in_thread
+def execute_refund(account_id: str, refund_id: str, actor: str | None = None) -> dict[str, Any]:
     init_db()
     now = _now()
     try:
@@ -177,6 +183,7 @@ async def execute_refund(account_id: str, refund_id: str) -> dict[str, Any]:
                     status=RefundStatus.EXECUTED.value,
                     updated_at=now,
                     executed_at=now,
+                    executed_by=actor,
                     failure_reason=None,
                 )
             )
@@ -200,24 +207,26 @@ async def execute_refund(account_id: str, refund_id: str) -> dict[str, Any]:
                 .values(
                     status=RefundStatus.FAILED.value,
                     updated_at=_now(),
+                    executed_by=actor,
                     failure_reason=str(exc),
                 )
             )
         raise RefundError(f"Refund execution failed: {exc}") from exc
 
 
-async def get_refund_request(account_id: str, refund_id: str) -> dict[str, Any] | None:
+@in_thread
+def get_refund_request(account_id: str, refund_id: str) -> dict[str, Any] | None:
     init_db()
     with get_engine().connect() as conn:
         return _get_request(conn, refund_id, account_id)
 
 
-async def _transition_refund(
+def _transition_refund(
     account_id: str,
     refund_id: str,
     from_status: str,
     to_status: str,
-    **timestamps: int,
+    **changes: Any,
 ) -> dict[str, Any]:
     init_db()
     now = _now()
@@ -243,7 +252,7 @@ async def _transition_refund(
                 refund_requests.c.account_id == account_id,
                 refund_requests.c.status == from_status,
             )
-            .values(status=to_status, updated_at=now, **timestamps)
+            .values(status=to_status, updated_at=now, **changes)
         )
         if updated.rowcount != 1:
             raise RefundError("Refund request status changed concurrently, please retry")
