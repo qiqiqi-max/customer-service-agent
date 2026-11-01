@@ -6,11 +6,13 @@ export function TraceList({ records }: { records: ExecutionRecord[] }) {
   return records.length ? (
     <div className="trace-list">
       {records.map((item) => (
-        <article key={item.id} className="trace-item">
-          <strong>{item.tool}</strong>
-          <span>{item.action}</span>
+        <details key={item.id} className="trace-item">
+          <summary>
+            <strong>{item.tool}</strong>
+            <span>{item.action}</span>
+          </summary>
           <pre>{formatValue(item.output)}</pre>
-        </article>
+        </details>
       ))}
     </div>
   ) : <p className="empty">暂无工具调用。</p>;
@@ -27,18 +29,35 @@ export function ResultList({
     <div className="result-list">
       {cards.map((card) => (
         <article key={card.id} className="result-card">
-          <strong>{card.title}</strong>
-          <span>{card.type}</span>
-          {card.status && <span className={`refund-status is-${card.status}`}>{refundStatusLabel(card.status)}</span>}
-          {card.fields.slice(0, 4).map((field) => (
-            <p key={field.label}><b>{field.label}</b>{field.value}</p>
-          ))}
-          {card.type === "退款退货" && <RefundActors card={card} />}
+          <div className="result-card-head">
+            <div>
+              <strong>{card.title}</strong>
+              <small>{card.type}</small>
+            </div>
+            {card.status && (
+              <span className={`refund-status is-${card.status}`}>{refundStatusLabel(card.status)}</span>
+            )}
+          </div>
+          <dl className="kv">
+            {card.fields.slice(0, 4).map((field) => (
+              <KeyValue key={field.label} label={field.label} value={field.value} />
+            ))}
+            {card.type === "退款退货" && <RefundActors card={card} />}
+          </dl>
           {card.type === "退款退货" && <RefundActions card={card} onAction={onAction} />}
         </article>
       ))}
     </div>
   ) : <p className="empty">暂无工单结果。</p>;
+}
+
+function KeyValue({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </>
+  );
 }
 
 function RefundActors({ card }: { card: ResultCard }) {
@@ -47,14 +66,14 @@ function RefundActors({ card }: { card: ResultCard }) {
     ["审批人", raw?.approved_by],
     ["拒绝人", raw?.rejected_by],
     ["执行人", raw?.executed_by]
-  ].filter(([, value]) => value);
-  return actors.length ? (
+  ].filter((item): item is [string, string] => Boolean(item[1]));
+  return (
     <>
       {actors.map(([label, value]) => (
-        <p key={label}><b>{label}</b>{value}</p>
+        <KeyValue key={label} label={label} value={value} />
       ))}
     </>
-  ) : null;
+  );
 }
 
 function RefundActions({
@@ -83,12 +102,12 @@ function RefundActions({
     <div className="refund-actions">
       {card.status === "pending_approval" && (
         <>
-          <button className="secondary-button" disabled={busy} onClick={() => run("reject")} type="button">拒绝</button>
-          <button className="primary-button" disabled={busy} onClick={() => run("approve")} type="button">批准退款</button>
+          <button className="btn sm" disabled={busy} onClick={() => run("reject")} type="button">拒绝</button>
+          <button className="btn sm primary" disabled={busy} onClick={() => run("approve")} type="button">批准退款</button>
         </>
       )}
       {card.status === "approved" && (
-        <button className="primary-button" disabled={busy} onClick={() => run("execute")} type="button">执行退款</button>
+        <button className="btn sm primary" disabled={busy} onClick={() => run("execute")} type="button">执行退款</button>
       )}
     </div>
   );

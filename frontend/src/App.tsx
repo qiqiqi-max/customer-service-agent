@@ -1,8 +1,9 @@
-import { Inbox, Loader2, MessageSquareText, History, PackageCheck, ClipboardCheck, RotateCcw, Send, Settings } from "lucide-react";
+import { ClipboardCheck, History, MessageSquareText, PackageCheck, PanelRight, Plus, RotateCcw, Settings } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "./api/client";
 import { DEFAULT_ACCOUNT_ID, SCENARIOS } from "./data/workbench";
 import { botUsageToInsights, collectInsights, normalizeResult } from "./lib/insights";
+import { useMediaQuery } from "./lib/useMediaQuery";
 import type {
   ChatMessage,
   ConversationSummary,
@@ -22,11 +23,11 @@ import { QualityView } from "./views/QualityView";
 import { SettingsView } from "./views/SettingsView";
 
 const viewItems = [
-  { id: "desk", label: "接待", icon: MessageSquareText },
-  { id: "history", label: "会话", icon: History },
-  { id: "products", label: "货架", icon: PackageCheck },
-  { id: "quality", label: "质检", icon: ClipboardCheck },
-  { id: "settings", label: "配置", icon: Settings }
+  { id: "desk", label: "接待", title: "客户接待", subtitle: "处理客户消息，查看工具调用和工单结果", icon: MessageSquareText },
+  { id: "history", label: "会话", title: "历史会话", subtitle: "按账号查看已归档的接待记录", icon: History },
+  { id: "products", label: "货架", title: "商品货架", subtitle: "选择助手可以介绍和推荐的商品与能力", icon: PackageCheck },
+  { id: "quality", label: "质检", title: "质检复盘", subtitle: "会话总结、回复质检与 FAQ 沉淀", icon: ClipboardCheck },
+  { id: "settings", label: "配置", title: "接入配置", subtitle: "访问密钥与后端接入说明", icon: Settings }
 ] as const;
 
 type ViewId = (typeof viewItems)[number]["id"];
@@ -45,12 +46,7 @@ export function App() {
   const [conversationPage, setConversationPage] = useState(1);
   const [conversationPageSize, setConversationPageSize] = useState(20);
   const [conversationTotal, setConversationTotal] = useState(0);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "system",
-      content: "当前接待已准备。选择场景、商品范围和服务能力后，可以开始处理客户消息。"
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [health, setHealth] = useState<"online" | "offline" | "checking">("checking");
@@ -64,6 +60,8 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [qualityReviews, setQualityReviews] = useState<QualityReviewRecord[]>([]);
   const [faqCandidates, setFaqCandidates] = useState<FAQCandidateRecord[]>([]);
+  const isWide = useMediaQuery("(min-width: 1200px)");
+  const [contextOpen, setContextOpen] = useState(isWide);
 
   const activeScenario = useMemo(
     () => SCENARIOS.find((item) => item.id === activeScenarioId) ?? SCENARIOS[0],
@@ -73,12 +71,7 @@ export function App() {
     () => viewItems.find((item) => item.id === activeView) ?? viewItems[0],
     [activeView]
   );
-  const workspaceStats = [
-    { label: "场景", value: activeScenario.label },
-    { label: "工具", value: `${selectedFunctions.size} 项` },
-    { label: "货架", value: `${selectedProducts.size} 个` },
-    { label: "会话", value: conversationId ? "已归档" : "未归档" }
-  ];
+  const healthLabel = health === "online" ? "后端在线" : health === "checking" ? "检查中" : "后端离线";
 
   const latestUserMessage = [...messages].reverse().find((item) => item.role === "user");
   const latestAssistantMessage = [...messages].reverse().find((item) => item.role === "assistant");
@@ -90,6 +83,20 @@ export function App() {
     loadProducts();
     loadConversations(accountId, 1, conversationPageSize);
   }, []);
+
+  // The context panel is docked on wide screens and a drawer on narrow ones.
+  useEffect(() => {
+    setContextOpen(isWide);
+  }, [isWide]);
+
+  useEffect(() => {
+    if (!contextOpen || isWide) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setContextOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [contextOpen, isWide]);
 
   useEffect(() => {
     if (activeView === "quality") void loadQualityHistory();
@@ -204,7 +211,7 @@ export function App() {
 
     const userMessage: ChatMessage = { role: "user", content };
     const history = messages.filter((item) => item.role !== "system");
-    setMessages((current) => [...current, userMessage, { role: "assistant", content: "正在生成回复..." }]);
+    setMessages((current) => [...current, userMessage]);
     setDraft("");
     setIsSending(true);
 
@@ -220,7 +227,7 @@ export function App() {
       const answer = payload.answer || "后端没有返回内容。";
       setConversationId(payload.conversation_id ?? conversationId);
       setMessages((current) => [
-        ...current.slice(0, -1),
+        ...current,
         {
           role: "assistant",
           content: answer,
@@ -236,7 +243,7 @@ export function App() {
       await loadConversations(accountId);
     } catch (error) {
       setMessages((current) => [
-        ...current.slice(0, -1),
+        ...current,
         {
           role: "system",
           content: `请求失败：${error instanceof Error ? error.message : "未知错误"}`
@@ -333,12 +340,9 @@ export function App() {
 
   function startNewConversation() {
     setConversationId(null);
-    setMessages([
-      {
-        role: "system",
-        content: "已创建新接待。你可以从快捷话术开始，也可以直接输入客户问题。"
-      }
-    ]);
+    setMessages([]);
+    setDraft("");
+    setActiveView("desk");
     setExecutionRecords([]);
     setResultCards([]);
     setSummary("暂无会话总结。");
@@ -358,22 +362,23 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app">
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">客</div>
           <div>
             <strong>客服中控台</strong>
-            <span>接待，履约，知识沉淀</span>
+            <small>接待 · 履约 · 知识沉淀</small>
           </div>
         </div>
 
-        <nav className="nav-list" aria-label="主导航">
+        <nav className="nav" aria-label="主导航">
           {viewItems.map((item) => {
             const Icon = item.icon;
             return (
               <button
                 key={item.id}
+                aria-current={activeView === item.id ? "page" : undefined}
                 className={activeView === item.id ? "nav-item is-active" : "nav-item"}
                 onClick={() => setActiveView(item.id)}
                 type="button"
@@ -385,125 +390,137 @@ export function App() {
           })}
         </nav>
 
-        <section className="sidebar-panel">
-          <div className="panel-title">
-            <span>服务状态</span>
-            <button className="icon-button" onClick={refreshHealth} type="button" title="刷新状态">
-              <RotateCcw size={16} />
-            </button>
-          </div>
-          <div className={`health-pill is-${health}`}>
-            <span />
-            {health === "online" ? "后端在线" : health === "checking" ? "检查中" : "后端离线"}
-          </div>
-          <label className="field">
-            <span>客户账号</span>
-            <input value={accountId} onChange={(event) => setAccountId(event.target.value)} />
-          </label>
-          <button className="secondary-button" onClick={() => loadConversations(accountId)} type="button">
-            刷新会话
+        <div className="sidebar-foot">
+          <span className={`status-dot is-${health}`}>{healthLabel}</span>
+          <button className="icon-btn" onClick={refreshHealth} title="刷新服务状态" type="button">
+            <RotateCcw size={15} />
           </button>
-        </section>
+        </div>
       </aside>
 
-      <main className="main-area">
-        <header className="topbar">
-          <div className="topbar-copy">
-            <span className="eyebrow">当前工作区</span>
-            <h1>{activeViewItem.label}</h1>
-            <p>把客户消息、工具结果、商品范围和质检复盘放在同一个操作面里。</p>
-            <div className="chip-row" aria-label="工作区概览">
-              <span className={`inline-status is-${health}`}>
-                {health === "online" ? "后端在线" : health === "checking" ? "检查中" : "后端离线"}
-              </span>
-              {workspaceStats.map((item) => (
-                <span key={item.label} className="workspace-chip">
-                  <em>{item.label}</em>
-                  <strong>{item.value}</strong>
-                </span>
-              ))}
-            </div>
+      <main className="workspace">
+        <header className="page-header">
+          <div className="page-title">
+            <h1>{activeViewItem.title}</h1>
+            <p>{activeViewItem.subtitle}</p>
           </div>
-          <div className="topbar-actions">
-            <button className="secondary-button" onClick={startNewConversation} type="button">
-              <Inbox size={16} />
-              新接待
+          <div className="page-actions">
+            <label className="account-field" title="客户账号">
+              <span>账号</span>
+              <input
+                aria-label="客户账号"
+                onChange={(event) => setAccountId(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void loadConversations(accountId, 1, conversationPageSize);
+                }}
+                value={accountId}
+              />
+              <button
+                className="icon-btn"
+                onClick={() => loadConversations(accountId, 1, conversationPageSize)}
+                title="按账号刷新会话"
+                type="button"
+              >
+                <RotateCcw size={14} />
+              </button>
+            </label>
+            <button className="btn" onClick={startNewConversation} title="新接待" type="button">
+              <Plus size={16} />
+              <span className="btn-text">新接待</span>
             </button>
-            <button className="primary-button" form="composer-form" disabled={isSending} type="submit">
-              {isSending ? <Loader2 className="spin" size={16} /> : <Send size={16} />}
-              发送
-            </button>
+            {activeView === "desk" && (
+              <button
+                aria-pressed={contextOpen}
+                className={contextOpen ? "btn is-active" : "btn"}
+                onClick={() => setContextOpen((current) => !current)}
+                title={contextOpen ? "收起上下文面板" : "展开上下文面板"}
+                type="button"
+              >
+                <PanelRight size={16} />
+                <span className="btn-text">上下文</span>
+                {resultCards.length > 0 && <span className="badge accent">{resultCards.length}</span>}
+              </button>
+            )}
           </div>
         </header>
 
-        {activeView === "desk" && (
-          <DeskView
-            activeScenario={activeScenario}
-            conversations={conversations}
-            draft={draft}
-            executionRecords={executionRecords}
-            isSending={isSending}
-            messages={messages}
-            products={products}
-            resultCards={resultCards}
-            selectedFunctions={selectedFunctions}
-            selectedProducts={selectedProducts}
-            onDraftChange={setDraft}
-            onOpenConversation={openConversation}
-            onPrompt={(prompt) => setDraft(prompt)}
-            onScenario={switchScenario}
-            onSend={handleSend}
-            onToggleFunction={toggleFunction}
-            onToggleProduct={toggleProduct}
-            onRefundAction={handleRefundAction}
-          />
-        )}
+        <div className={activeView === "desk" ? "page-body is-desk" : "page-body"}>
+          {activeView === "desk" && (
+            <DeskView
+              activeScenario={activeScenario}
+              contextOpen={contextOpen}
+              conversationId={conversationId}
+              conversations={conversations}
+              draft={draft}
+              executionRecords={executionRecords}
+              isSending={isSending}
+              messages={messages}
+              products={products}
+              resultCards={resultCards}
+              selectedFunctions={selectedFunctions}
+              selectedProducts={selectedProducts}
+              onCloseContext={() => setContextOpen(false)}
+              onDraftChange={setDraft}
+              onOpenConversation={(id) => {
+                if (!isWide) setContextOpen(false);
+                void openConversation(id);
+              }}
+              onPrompt={(prompt) => setDraft(prompt)}
+              onScenario={switchScenario}
+              onSend={handleSend}
+              onToggleFunction={toggleFunction}
+              onToggleProduct={toggleProduct}
+              onRefundAction={handleRefundAction}
+            />
+          )}
 
-        {activeView === "history" && (
-          <HistoryView
-            accountId={accountId}
-            conversations={conversations}
-            onOpenConversation={openConversation}
-            onRefresh={() => loadConversations(accountId, conversationPage, conversationPageSize)}
-            page={conversationPage}
-            pageSize={conversationPageSize}
-            total={conversationTotal}
-            onPage={(page) => loadConversations(accountId, page, conversationPageSize)}
-            onPageSize={(pageSize) => loadConversations(accountId, 1, pageSize)}
-          />
-        )}
+          {activeView === "history" && (
+            <HistoryView
+              accountId={accountId}
+              conversationId={conversationId}
+              conversations={conversations}
+              onOpenConversation={openConversation}
+              onRefresh={() => loadConversations(accountId, conversationPage, conversationPageSize)}
+              page={conversationPage}
+              pageSize={conversationPageSize}
+              total={conversationTotal}
+              onPage={(page) => loadConversations(accountId, page, conversationPageSize)}
+              onPageSize={(pageSize) => loadConversations(accountId, 1, pageSize)}
+            />
+          )}
 
-        {activeView === "products" && (
-          <ProductsView
-            products={products}
-            selectedProducts={selectedProducts}
-            selectedFunctions={selectedFunctions}
-            onToggleFunction={toggleFunction}
-            onToggleProduct={toggleProduct}
-          />
-        )}
+          {activeView === "products" && (
+            <ProductsView
+              products={products}
+              selectedProducts={selectedProducts}
+              selectedFunctions={selectedFunctions}
+              onToggleFunction={toggleFunction}
+              onToggleProduct={toggleProduct}
+            />
+          )}
 
-        {activeView === "quality" && (
-          <QualityView
-            faqResult={faqResult}
-            faqScore={faqScore}
-            quality={quality}
-            qualityKeywords={qualityKeywords}
-            summary={summary}
-            onFaqScore={setFaqScore}
-            onKeywords={setQualityKeywords}
-            onQuality={handleQuality}
-            onSaveFaq={handleSaveFaq}
-            onSummary={handleSummary}
-            qualityReviews={qualityReviews}
-            faqCandidates={faqCandidates}
-          />
-        )}
+          {activeView === "quality" && (
+            <QualityView
+              faqResult={faqResult}
+              faqScore={faqScore}
+              quality={quality}
+              qualityKeywords={qualityKeywords}
+              summary={summary}
+              onFaqScore={setFaqScore}
+              onKeywords={setQualityKeywords}
+              onQuality={handleQuality}
+              onSaveFaq={handleSaveFaq}
+              onSummary={handleSummary}
+              qualityReviews={qualityReviews}
+              faqCandidates={faqCandidates}
+            />
+          )}
 
-        {activeView === "settings" && <SettingsView onCredentialsChange={handleCredentialsChange} />}
+          {activeView === "settings" && <SettingsView onCredentialsChange={handleCredentialsChange} />}
+        </div>
       </main>
 
-      {notice && <div className="toast">{notice}</div>}
+      {notice && <div className="toast" role="status">{notice}</div>}
     </div>
   );
 }

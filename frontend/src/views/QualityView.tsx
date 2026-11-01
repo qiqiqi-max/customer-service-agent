@@ -16,89 +16,117 @@ export function QualityView(props: {
   faqCandidates: FAQCandidateRecord[];
 }) {
   return (
-    <section className="page-grid">
-      <div className="surface ops">
-        <div className="section-head">
-          <div>
-            <span className="eyebrow">复盘</span>
-            <h2>会话总结</h2>
+    <div className="page">
+      <div className="split">
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>会话总结</h2>
+              <p>基于当前接待台的对话生成</p>
+            </div>
+            <button className="btn" onClick={props.onSummary} type="button">
+              <FileText size={15} />
+              生成
+            </button>
           </div>
-          <button className="secondary-button" onClick={props.onSummary} type="button">
-            <FileText size={16} />
-            生成
-          </button>
-        </div>
-        <pre className="output-box">{props.summary}</pre>
+          <div className="panel-body">
+            <pre className="output-box">{props.summary}</pre>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>回复质检</h2>
+              <p>检查回复中是否命中风险关键词</p>
+            </div>
+            <button className="btn" onClick={props.onQuality} type="button">
+              <Gauge size={15} />
+              检查
+            </button>
+          </div>
+          <div className="panel-body">
+            <label className="field">
+              <span>质检关键词</span>
+              <input value={props.qualityKeywords} onChange={(event) => props.onKeywords(event.target.value)} />
+            </label>
+            <pre className="output-box">{props.quality}</pre>
+          </div>
+        </section>
       </div>
 
-      <div className="surface ops">
-        <div className="section-head">
+      <section className="panel">
+        <div className="panel-head">
           <div>
-            <span className="eyebrow">质检</span>
-            <h2>回复质检</h2>
-          </div>
-          <button className="secondary-button" onClick={props.onQuality} type="button">
-            <Gauge size={16} />
-            检查
-          </button>
-        </div>
-        <label className="field">
-          <span>质检关键词</span>
-          <input value={props.qualityKeywords} onChange={(event) => props.onKeywords(event.target.value)} />
-        </label>
-        <pre className="output-box">{props.quality}</pre>
-      </div>
-
-      <div className="surface ops wide">
-        <div className="section-head">
-          <div>
-            <span className="eyebrow">知识沉淀</span>
             <h2>FAQ 沉淀</h2>
+            <p>把最近一轮客户问题和助手回复保存为 FAQ 候选</p>
           </div>
-          <button className="primary-button" onClick={props.onSaveFaq} type="button">
-            <Archive size={16} />
+          <button className="btn primary" onClick={props.onSaveFaq} type="button">
+            <Archive size={15} />
             保存
           </button>
         </div>
-        <label className="field">
-          <span>满意度评分：{props.faqScore}</span>
-          <div className="score-options" role="radiogroup" aria-label="满意度评分">
-            {[1, 2, 3, 4, 5].map((score) => (
-              <button
-                aria-checked={props.faqScore === score}
-                className={props.faqScore === score ? "score-option is-selected" : "score-option"}
-                key={score}
-                onClick={() => props.onFaqScore(score)}
-                role="radio"
-                type="button"
-              >
-                {score}
-              </button>
-            ))}
+        <div className="panel-body">
+          <div className="field">
+            <span id="faq-score-label">满意度评分：{props.faqScore}</span>
+            <div className="score-row" role="radiogroup" aria-labelledby="faq-score-label">
+              {[1, 2, 3, 4, 5].map((score) => (
+                <button
+                  aria-checked={props.faqScore === score}
+                  className={props.faqScore === score ? "score-btn is-selected" : "score-btn"}
+                  key={score}
+                  onClick={() => props.onFaqScore(score)}
+                  role="radio"
+                  type="button"
+                >
+                  {score}
+                </button>
+              ))}
+            </div>
           </div>
-        </label>
-        <pre className="output-box">{props.faqResult}</pre>
-      </div>
+          <pre className="output-box">{props.faqResult}</pre>
+        </div>
+      </section>
 
-      <div className="surface ops wide">
-        <div className="section-head"><div><span className="eyebrow">历史记录</span><h2>最近质检</h2></div></div>
-        {props.qualityReviews.length ? props.qualityReviews.slice(0, 8).map((item) => (
-          <div className="record-row" key={item.id}>
-            <strong>{item.structured_result?.risk_level ?? "未评级"}</strong>
-            <span>{item.result || item.content || "无内容"}</span>
+      <div className="split">
+        <section className="panel">
+          <div className="panel-head">
+            <h2>最近质检</h2>
+            <span className="badge">{props.qualityReviews.length}</span>
           </div>
-        )) : <p className="muted">暂无历史质检记录</p>}
-      </div>
+          {props.qualityReviews.length ? (
+            <div className="record-list">
+              {props.qualityReviews.slice(0, 8).map((item) => (
+                <div className="record-row" key={item.id}>
+                  <strong>{item.structured_result?.risk_level ?? "未评级"}</strong>
+                  <span title={item.result || item.content}>{item.result || item.content || "无内容"}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="panel-body"><p className="empty">暂无历史质检记录。</p></div>
+          )}
+        </section>
 
-      <div className="surface ops wide">
-        <div className="section-head"><div><span className="eyebrow">知识审核</span><h2>FAQ 候选</h2></div></div>
-        {props.faqCandidates.length ? props.faqCandidates.slice(0, 8).map((item) => (
-          <div className="record-row" key={item.id}>
-            <strong>{item.status ?? "待处理"}</strong>
-            <span>{item.question || "未命名问题"}</span>
+        <section className="panel">
+          <div className="panel-head">
+            <h2>FAQ 候选</h2>
+            <span className="badge">{props.faqCandidates.length}</span>
           </div>
-        )) : <p className="muted">暂无 FAQ 候选</p>}
+          {props.faqCandidates.length ? (
+            <div className="record-list">
+              {props.faqCandidates.slice(0, 8).map((item) => (
+                <div className="record-row" key={item.id}>
+                  <strong>{item.status ?? "待处理"}</strong>
+                  <span title={item.question}>{item.question || "未命名问题"}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="panel-body"><p className="empty">暂无 FAQ 候选。</p></div>
+          )}
+        </section>
       </div>
-    </section>
+    </div>
   );
 }

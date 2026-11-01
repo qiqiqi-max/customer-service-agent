@@ -9,55 +9,66 @@ export function ProductsView(props: {
   onToggleProduct: (name: string) => void;
 }) {
   return (
-    <section className="page-grid">
-      <div className="surface">
-        <div className="section-head">
+    <div className="page">
+      <section className="panel">
+        <div className="panel-head">
           <div>
-            <span className="eyebrow">商品范围</span>
             <h2>商品货架</h2>
+            <p>勾选的商品会作为接待时的商品范围</p>
           </div>
-          <span className="count-badge">{props.products.length}</span>
+          <span className="badge accent">
+            {props.selectedProducts.size}/{props.products.length}
+          </span>
         </div>
-        <div className="product-grid">
-          {props.products.map((product) => (
-            <label key={product.name} className="product-card">
-              <input
-                checked={props.selectedProducts.has(product.name)}
-                onChange={() => props.onToggleProduct(product.name)}
-                type="checkbox"
-              />
-              <div className="product-thumb">{product.name.slice(0, 1)}</div>
-              <div>
-                <strong>{product.name}</strong>
-                <p>{product.description}</p>
-              </div>
-            </label>
-          ))}
+        <div className="panel-body">
+          {props.products.length ? (
+            <div className="product-grid">
+              {props.products.map((product) => {
+                const selected = props.selectedProducts.has(product.name);
+                return (
+                  <label key={product.name} className={selected ? "product-card is-selected" : "product-card"}>
+                    <div className="product-thumb">{product.name.slice(0, 1)}</div>
+                    <div>
+                      <strong>{product.name}</strong>
+                      <p>{product.description}</p>
+                    </div>
+                    <input checked={selected} onChange={() => props.onToggleProduct(product.name)} type="checkbox" />
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="empty">商品数据暂未载入。</p>
+          )}
         </div>
-      </div>
-      <div className="surface">
-        <div className="section-head">
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
           <div>
-            <span className="eyebrow">知识范围</span>
             <h2>能力开关</h2>
+            <p>控制助手在接待中可以调用的工具</p>
+          </div>
+          <span className="badge accent">{props.selectedFunctions.size}</span>
+        </div>
+        <div className="panel-body">
+          <div className="toggle-list">
+            {SUPPORT_FUNCTIONS.map((item) => (
+              <label key={item.key} className="toggle-item">
+                <input
+                  checked={props.selectedFunctions.has(item.key)}
+                  onChange={() => props.onToggleFunction(item.key)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{item.description}</small>
+                </span>
+              </label>
+            ))}
           </div>
         </div>
-        <div className="check-list spacious">
-          {SUPPORT_FUNCTIONS.map((item) => (
-            <label key={item.key} className="check-card">
-              <input
-                checked={props.selectedFunctions.has(item.key)}
-                onChange={() => props.onToggleFunction(item.key)}
-                type="checkbox"
-              />
-              <span>
-                <strong>{item.label}</strong>
-                <small>{item.description}</small>
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

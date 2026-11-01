@@ -22,8 +22,8 @@ export type ConversationSummary = {
   account_id?: string;
   title?: string;
   last_message?: string;
-  updated_at?: string;
-  created_at?: string;
+  updated_at?: string | number;
+  created_at?: string | number;
 };
 
 export type ConversationDetail = ConversationSummary & {

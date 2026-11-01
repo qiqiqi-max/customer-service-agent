@@ -81,13 +81,14 @@ export function formatValue(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-export function formatTime(value?: string) {
-  if (!value) {
+export function formatTime(value?: string | number) {
+  if (value === undefined || value === null || value === "") {
     return "暂无时间";
   }
-  const date = new Date(value);
+  // The API returns epoch seconds; Date expects milliseconds.
+  const date = new Date(typeof value === "number" ? value * 1000 : value);
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return String(value);
   }
   return date.toLocaleString("zh-CN", {
     month: "2-digit",
