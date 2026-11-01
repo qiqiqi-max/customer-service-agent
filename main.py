@@ -17,7 +17,7 @@ from audit_store import (
     save_faq_candidate,
     save_quality_review,
 )
-from config import api_keys, endpoint_id, language, mock_mode
+from config import api_keys, endpoint_id, language, mock_mode, refund_approver_keys
 from database import migrate_database
 from conversation_store import (
     attach_conversation_metadata,
@@ -33,7 +33,7 @@ from data.product import get_products
 from data.rag import retrieval_knowledge
 from data.refunds import RefundError, get_refund_request
 from business_services import get_business_service
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from llm_provider import is_openai_compatible_provider, run_openai_compatible_chat
@@ -208,58 +208,66 @@ async def custom_support_chat(
         last_bot_usage = None
         last_response_id = None
         last_model = endpoint_id
-        async for resp in llm.astream(
-            functions=tools,
-            additional_system_prompts=[knowledge_prompt],
-            extra_headers=get_auth_header(),
-            extra_body={"thinking": {"type": "disabled"}},
-        ):
-            if action_detail:
-                if resp.bot_usage:
-                    resp.merge_bot_usages(BotUsage(action_details=[action_detail]))
-                else:
-                    resp.bot_usage = BotUsage(action_details=[action_detail])
-            _attach_metadata(resp, conversation_id)
-            if getattr(resp, "bot_usage", None):
-                last_bot_usage = resp.bot_usage
-            if getattr(resp, "id", None):
-                last_response_id = resp.id
-            if getattr(resp, "model", None):
-                last_model = resp.model
-            content_delta = _chunk_content(resp)
-            if content_delta:
-                streamed_text.append(content_delta)
-            yield resp
-        record_chat_turn(
-            conversation_id,
-            request,
-            ArkChatResponse(
-                id=last_response_id or f"stream-{int(time.time() * 1000)}",
-                created=int(time.time()),
+        completed = False
+        try:
+            async for resp in llm.astream(
+                functions=tools,
+                additional_system_prompts=[knowledge_prompt],
+                extra_headers=get_auth_header(),
+                extra_body={"thinking": {"type": "disabled"}},
+            ):
+                if action_detail:
+                    if resp.bot_usage:
+                        resp.merge_bot_usages(BotUsage(action_details=[action_detail]))
+                    else:
+                        resp.bot_usage = BotUsage(action_details=[action_detail])
+                _attach_metadata(resp, conversation_id)
+                if getattr(resp, "bot_usage", None):
+                    last_bot_usage = resp.bot_usage
+                if getattr(resp, "id", None):
+                    last_response_id = resp.id
+                if getattr(resp, "model", None):
+                    last_model = resp.model
+                content_delta = _chunk_content(resp)
+                if content_delta:
+                    streamed_text.append(content_delta)
+                yield resp
+            completed = True
+        finally:
+            # Runs on normal completion, client disconnect (generator close) and
+            # upstream errors, so the user message and any partial reply are kept.
+            record_chat_turn(
+                conversation_id,
+                request,
+                ArkChatResponse(
+                    id=last_response_id or f"stream-{int(time.time() * 1000)}",
+                    created=int(time.time()),
+                    model=last_model,
+                    object="chat.completion",
+                    choices=[
+                        Choice(
+                            index=0,
+                            finish_reason="stop",
+                            message={
+                                "role": "assistant",
+                                "content": "".join(streamed_text),
+                            },
+                        )
+                    ],
+                    bot_usage=last_bot_usage,
+                    metadata={"conversation_id": conversation_id},
+                ),
+            )
+            log_event(
+                "llm.volcengine_stream",
+                level="info" if completed else "warning",
+                account_id=account_id,
+                conversation_id=conversation_id,
                 model=last_model,
-                object="chat.completion",
-                choices=[
-                    Choice(
-                        index=0,
-                        finish_reason="stop",
-                        message={
-                            "role": "assistant",
-                            "content": "".join(streamed_text),
-                        },
-                    )
-                ],
-                bot_usage=last_bot_usage,
-                metadata={"conversation_id": conversation_id},
-            ),
-        )
-        log_event(
-            "llm.volcengine_stream",
-            account_id=account_id,
-            conversation_id=conversation_id,
-            model=last_model,
-            duration_ms=elapsed_ms(model_started),
-            output_chars=len("".join(streamed_text)),
-        )
+                duration_ms=elapsed_ms(model_started),
+                output_chars=len("".join(streamed_text)),
+                completed=completed,
+            )
     else:
         model_started = monotonic()
         resp = await llm.arun(
@@ -334,7 +342,7 @@ class SummaryRequest(BaseModel):
 
 
 class RefundActionRequest(BaseModel):
-    account_id: str = Field("100000", max_length=100)
+    account_id: str = Field(..., min_length=1, max_length=100)
 
 
 async def require_api_key(
@@ -344,16 +352,49 @@ async def require_api_key(
     if not api_keys:
         return
 
+    token = _request_token(x_api_key, authorization)
+    if token in api_keys or token in refund_approver_keys:
+        return
+
+    raise _unauthorized()
+
+
+async def require_refund_approver(
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Approve, reject and execute need an approver key once any key is configured.
+
+    With API_KEYS set but REFUND_APPROVER_KEYS empty, refund actions are denied
+    rather than falling back to the general keys.
+    """
+    if not api_keys and not refund_approver_keys:
+        return
+
+    token = _request_token(x_api_key, authorization)
+    if token in refund_approver_keys:
+        return
+    if token in api_keys:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "RefundApproverRequired",
+                "message": "Refund approval requires a refund approver key.",
+            },
+        )
+    raise _unauthorized()
+
+
+def _request_token(x_api_key: Optional[str], authorization: Optional[str]) -> Optional[str]:
     if not isinstance(x_api_key, str):
         x_api_key = None
     if not isinstance(authorization, str):
         authorization = None
+    return x_api_key or _bearer_token(authorization)
 
-    token = x_api_key or _bearer_token(authorization)
-    if token in api_keys:
-        return
 
-    raise HTTPException(
+def _unauthorized() -> HTTPException:
+    return HTTPException(
         status_code=401,
         detail={
             "code": "Unauthorized",
@@ -390,13 +431,20 @@ async def workbench_page():
     return FileResponse(WEBUI_DIR / "index.html")
 
 
-async def conversations(limit: int = 20, offset: int = 0, account_id: Optional[str] = None):
+AccountIdQuery = Query(..., min_length=1, max_length=100)
+
+
+async def conversations(
+    account_id: str = AccountIdQuery,
+    limit: int = 20,
+    offset: int = 0,
+):
     return list_conversations(limit=limit, offset=offset, account_id=account_id)
 
 
 async def conversation_detail(
     conversation_id: str,
-    account_id: Optional[str] = None,
+    account_id: str = AccountIdQuery,
 ):
     conversation = get_conversation(conversation_id, account_id=account_id)
     if not conversation:
@@ -412,7 +460,7 @@ async def conversation_detail(
 
 async def conversation_tool_calls(
     conversation_id: str,
-    account_id: str,
+    account_id: str = AccountIdQuery,
     limit: int = 100,
 ):
     return {
@@ -426,7 +474,7 @@ async def conversation_tool_calls(
 
 
 async def quality_reviews(
-    account_id: str,
+    account_id: str = AccountIdQuery,
     conversation_id: Optional[str] = None,
     limit: int = 50,
 ):
@@ -439,13 +487,13 @@ async def quality_reviews(
     }
 
 
-async def faq_candidates(account_id: Optional[str] = None, limit: int = 50):
+async def faq_candidates(account_id: str = AccountIdQuery, limit: int = 50):
     return {
         "candidates": list_faq_candidates(account_id=account_id, limit=limit),
     }
 
 
-async def refund_detail(refund_id: str, account_id: str):
+async def refund_detail(refund_id: str, account_id: str = AccountIdQuery):
     result = await get_refund_request(account_id, refund_id)
     if not result:
         raise HTTPException(status_code=404, detail="Refund request not found")
@@ -802,6 +850,7 @@ def register_routes(server: BotServer) -> BotServer:
         return response
 
     business_api_dependencies = [Depends(require_api_key)]
+    refund_approver_dependencies = [Depends(require_refund_approver)]
     server.app.add_api_route(
         "/api/v3/bots/chat/completions",
         get_handler(custom_support_chat),
@@ -897,19 +946,19 @@ def register_routes(server: BotServer) -> BotServer:
         "/api/refunds/{refund_id}/approve",
         approve_refund_request,
         methods=["POST"],
-        dependencies=business_api_dependencies,
+        dependencies=refund_approver_dependencies,
     )
     server.app.add_api_route(
         "/api/refunds/{refund_id}/reject",
         reject_refund_request,
         methods=["POST"],
-        dependencies=business_api_dependencies,
+        dependencies=refund_approver_dependencies,
     )
     server.app.add_api_route(
         "/api/refunds/{refund_id}/execute",
         execute_refund_request,
         methods=["POST"],
-        dependencies=business_api_dependencies,
+        dependencies=refund_approver_dependencies,
     )
     server.app.add_api_route(
         "/api/v3/bots/chat/completions/save_faq",
@@ -940,6 +989,12 @@ def register_routes(server: BotServer) -> BotServer:
 
 def run_server() -> None:
     configure_runtime()
+    if not api_keys and not refund_approver_keys:
+        log_event(
+            "auth.disabled",
+            level="warning",
+            message="API_KEYS and REFUND_APPROVER_KEYS are empty; business and refund approval endpoints are unauthenticated.",
+        )
     migrate_database()
     server = create_server()
     port = os.getenv("_FAAS_RUNTIME_PORT")

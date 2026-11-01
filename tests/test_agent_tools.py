@@ -14,6 +14,13 @@ class TestAgentTools(unittest.IsolatedAsyncioTestCase):
         names = [item["function"]["name"] for item in tools]
         self.assertEqual(names, ["order_check"])
 
+    def test_order_refund_schema_requires_order_id(self):
+        tools = build_openai_tools(["order_refund"])
+        refund = next(item for item in tools if item["function"]["name"] == "order_refund")
+
+        self.assertEqual(refund["function"]["parameters"]["required"], ["order_id"])
+        self.assertNotIn("required", refund["function"])
+
     async def test_order_check_executor_returns_orders(self):
         executor = build_tool_executor(f"agent_{uuid4().hex}")
         output = await executor(

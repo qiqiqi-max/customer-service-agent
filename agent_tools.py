@@ -91,8 +91,8 @@ def build_openai_tools(functions: list[str] | None) -> list[dict]:
                                 "description": "Refund reason summarized from the conversation.",
                             },
                         },
+                        "required": ["order_id"],
                     },
-                    "required": ["order_id"],
                 },
             }
         )

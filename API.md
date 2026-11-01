@@ -85,13 +85,33 @@ POST /api/refunds/{refund_id}/reject
 POST /api/refunds/{refund_id}/execute
 ```
 
-Approval and execution requests receive the account ID in the JSON body:
+Approval and execution requests must include the account ID in the JSON body
+(there is no default; a missing or empty value returns 422):
 
 ```json
 {
   "account_id": "100000"
 }
 ```
+
+Approve, reject, and execute require a refund approver key, separate from the
+general business keys:
+
+```env
+API_KEYS=key_for_agent_workbench
+REFUND_APPROVER_KEYS=key_for_refund_reviewer
+```
+
+- A request with a key from `REFUND_APPROVER_KEYS` is accepted.
+- A request with a key that is only in `API_KEYS` returns `403 RefundApproverRequired`.
+- A request without a valid key returns `401`.
+- If `API_KEYS` is set and `REFUND_APPROVER_KEYS` is empty, refund actions are
+  denied for every caller.
+- If both are empty (local development), refund actions are open, and the
+  server logs an `auth.disabled` warning at startup.
+
+Approver keys are also accepted on the other business endpoints, so a reviewer
+can read conversations and refund details with the same key.
 
 The UI displays `pending_approval` as “待人工确认”, `approved` as “已批准，待执行”,
 and `executed` as “退款已完成”. A rejected or failed request must not update
@@ -470,16 +490,20 @@ Additional persistence endpoints:
 - `GET /api/quality-reviews?account_id=...`
 - `GET /api/faq-candidates?account_id=...`
 
+`account_id` is required on all of these endpoints and on the two below. A
+missing or empty value returns 422, so a request can never list data across
+accounts.
+
 List recent conversations:
 
 ```http
-GET /api/conversations?limit=50
+GET /api/conversations?account_id=100000&limit=50
 ```
 
 Get one conversation:
 
 ```http
-GET /api/conversations/{conversation_id}
+GET /api/conversations/{conversation_id}?account_id=100000
 ```
 
 Chat responses include:

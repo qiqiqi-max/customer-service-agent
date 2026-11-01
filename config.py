@@ -46,7 +46,12 @@ api_keys = [
     for key in os.getenv("API_KEYS", os.getenv("API_KEY", "")).split(",")
     if key.strip()
 ]
-business_data_provider = os.getenv("BUSINESS_DATA_PROVIDER", "mock").lower()
+refund_approver_keys = [
+    key.strip()
+    for key in os.getenv("REFUND_APPROVER_KEYS", "").split(",")
+    if key.strip()
+]
+business_data_provider = os.getenv("BUSINESS_DATA_PROVIDER", "mysql").lower()
 business_api_base_url = os.getenv("BUSINESS_API_BASE_URL", "")
 business_api_key = os.getenv("BUSINESS_API_KEY", "")
 business_api_timeout = float(os.getenv("BUSINESS_API_TIMEOUT", "8"))

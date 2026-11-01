@@ -166,7 +166,7 @@ async def execute_refund(account_id: str, refund_id: str) -> dict[str, Any]:
                     updated_at=now,
                 )
             )
-            conn.execute(
+            updated = conn.execute(
                 update(refund_requests)
                 .where(
                     refund_requests.c.id == refund_id,
@@ -180,6 +180,9 @@ async def execute_refund(account_id: str, refund_id: str) -> dict[str, Any]:
                     failure_reason=None,
                 )
             )
+            if updated.rowcount != 1:
+                # Raising inside the transaction also rolls back the order update above.
+                raise RefundError("Refund request status changed concurrently, please retry")
             result = _get_request(conn, refund_id, account_id) or {}
             result["message"] = "Refund executed successfully"
             return result
@@ -219,14 +222,21 @@ async def _transition_refund(
     init_db()
     now = _now()
     with get_engine().begin() as conn:
-        request = _get_request(conn, refund_id, account_id)
-        if not request:
+        request_row = conn.execute(
+            select(refund_requests)
+            .where(
+                refund_requests.c.id == refund_id,
+                refund_requests.c.account_id == account_id,
+            )
+            .with_for_update()
+        ).mappings().first()
+        if not request_row:
             raise RefundError("Refund request does not exist")
-        if request["status"] != from_status:
+        if request_row["status"] != from_status:
             raise RefundError(
                 f"Refund request must be {from_status} before it can become {to_status}"
             )
-        conn.execute(
+        updated = conn.execute(
             update(refund_requests)
             .where(
                 refund_requests.c.id == refund_id,
@@ -235,6 +245,8 @@ async def _transition_refund(
             )
             .values(status=to_status, updated_at=now, **timestamps)
         )
+        if updated.rowcount != 1:
+            raise RefundError("Refund request status changed concurrently, please retry")
         result = _get_request(conn, refund_id, account_id) or {}
         result["message"] = f"Refund request is now {to_status}"
         return result

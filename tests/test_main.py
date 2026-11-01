@@ -1,7 +1,8 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -56,6 +57,66 @@ class TestRouteRegistration(unittest.TestCase):
         self.assertEqual(legacy_denied.status_code, 401)
         self.assertEqual(standard_allowed.status_code, 200)
         self.assertEqual(legacy_allowed.status_code, 200)
+
+    def test_refund_actions_require_approver_key(self):
+        service = MagicMock()
+        service.approve_refund = AsyncMock(return_value={"status": "approved"})
+        with patch("main.api_keys", ["secret-key"]):
+            with patch("main.refund_approver_keys", ["approver-key"]):
+                with patch("main.get_business_service", return_value=service):
+                    client = TestClient(main.create_server().app)
+                    body = {"account_id": "100000"}
+
+                    missing = client.post("/api/refunds/r1/approve", json=body)
+                    general = client.post(
+                        "/api/refunds/r1/approve",
+                        json=body,
+                        headers={"X-API-Key": "secret-key"},
+                    )
+                    approver = client.post(
+                        "/api/refunds/r1/approve",
+                        json=body,
+                        headers={"Authorization": "Bearer approver-key"},
+                    )
+                    approver_on_business_api = client.get(
+                        "/api/products",
+                        headers={"X-API-Key": "approver-key"},
+                    )
+
+        self.assertEqual(missing.status_code, 401)
+        self.assertEqual(general.status_code, 403)
+        self.assertEqual(approver.status_code, 200)
+        self.assertEqual(approver_on_business_api.status_code, 200)
+        service.approve_refund.assert_awaited_once_with("100000", "r1")
+
+    def test_refund_actions_denied_without_configured_approver_keys(self):
+        with patch("main.api_keys", ["secret-key"]):
+            with patch("main.refund_approver_keys", []):
+                client = TestClient(main.create_server().app)
+                response = client.post(
+                    "/api/refunds/r1/execute",
+                    json={"account_id": "100000"},
+                    headers={"X-API-Key": "secret-key"},
+                )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_scoped_endpoints_require_account_id(self):
+        with patch("main.api_keys", []):
+            with patch("main.refund_approver_keys", []):
+                client = TestClient(main.create_server().app)
+
+                responses = [
+                    client.get("/api/conversations"),
+                    client.get("/api/conversations?account_id="),
+                    client.get("/api/conversations/conv_1"),
+                    client.get("/api/faq-candidates"),
+                    client.get("/api/quality-reviews"),
+                    client.get("/api/refunds/r1"),
+                    client.post("/api/refunds/r1/approve", json={}),
+                ]
+
+        self.assertEqual([item.status_code for item in responses], [422] * len(responses))
 
     def test_health_and_ready_are_public(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -134,6 +195,48 @@ class TestChatKnowledgeUsage(unittest.IsolatedAsyncioTestCase):
             responses[0].bot_usage.action_details[0].tool_details[0].name,
             "dify_retrieval",
         )
+
+    async def test_interrupted_stream_still_records_partial_turn(self):
+        def chunk(text):
+            return SimpleNamespace(
+                id="chunk-1",
+                model="test-model",
+                bot_usage=None,
+                metadata=None,
+                choices=[SimpleNamespace(delta=SimpleNamespace(content=text))],
+            )
+
+        class FakeLLM:
+            def __init__(self, **kwargs):
+                pass
+
+            async def astream(self, **kwargs):
+                yield chunk("您好，")
+                yield chunk("订单已发货。")
+
+        request = ArkChatRequest(
+            stream=True,
+            model="test",
+            messages=[ArkMessage(role="user", content="订单到哪了？")],
+        )
+        record_chat_turn = MagicMock()
+
+        with patch("main.mock_mode", False), \
+                patch("main.is_openai_compatible_provider", return_value=False), \
+                patch("main.ensure_conversation", return_value="conv_stream"), \
+                patch("main.register_support_functions", return_value=([], "system")), \
+                patch("main.get_products", return_value={}), \
+                patch("main.retrieval_knowledge", return_value=("", None)), \
+                patch("main.get_auth_header", return_value={}), \
+                patch("main.BaseChatLanguageModel", FakeLLM), \
+                patch("main.record_chat_turn", record_chat_turn):
+            stream = main.custom_support_chat.__wrapped__(request)
+            await stream.__anext__()
+            await stream.aclose()
+
+        record_chat_turn.assert_called_once()
+        recorded_response = record_chat_turn.call_args.args[2]
+        self.assertEqual(recorded_response.choices[0].message.content, "您好，")
 
 
 class TestBusinessAPI(unittest.IsolatedAsyncioTestCase):
